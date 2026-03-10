@@ -127,6 +127,14 @@ The scheduler handles two types of recurring work:
 
 **Cron jobs** — Defined in `cron.yaml` under the `jobs:` key. Each job has a `name` and `cron` expression. When a job fires, the scheduler checks for an inline `prompt` first. If none, it looks for `cron/{name}.md` by convention. The prompt is sent to the agent through the router as a synthetic message.
 
+### 6. Self-modification
+
+The agent can edit its own source code via its shell tool. TypeScript is executed directly with `tsx` — there is no build step. To apply code changes, the agent restarts itself using the `./logos restart` wrapper script.
+
+The wrapper script type-checks the code (`tsc --noEmit`) before restarting. If the check fails, the restart is aborted and the old process keeps running. This prevents the agent from killing itself with a bad edit.
+
+The typical flow: the agent edits a file, sends a message explaining what it changed, then runs `./logos restart` as its last action.
+
 ## Startup flow
 
 1. Initialize SQLite database (create tables if they don't exist)
@@ -168,6 +176,8 @@ heartbeat.md        # Recurring checks
 cron.yaml           # Scheduled tasks
 cron/               # Detailed instructions for complex cron jobs
   consolidate-memories.md
+logos               # Wrapper script (start/stop/restart/status)
+logs/               # Runtime logs (gitignored)
 recipes/            # Implementation guides for channels and capabilities
   telegram.md
   whatsapp.md

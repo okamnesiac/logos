@@ -19,6 +19,7 @@ The chosen name should be set as `ASSISTANT_NAME` in `.env`. The code should rea
 - `better-sqlite3` — SQLite driver
 - `js-yaml` — YAML parsing for `cron.yaml`
 - `node-cron` — cron expression scheduling
+- `tsx` — TypeScript execution without a build step. The agent can modify its own source and restart to apply changes.
 - `dotenv` — load environment variables from `.env`
 - Channel-specific libraries — see the chosen recipe in `recipes/`
 
@@ -126,6 +127,10 @@ Create a simple bash script at the project root called `logos` that supports:
 - `./logos stop` — stop it
 - `./logos restart` — restart it
 - `./logos status` — check if it's running
+
+Run the process with `tsx index.ts` (not compiled JS). This way the agent can modify its own TypeScript source and restart to apply changes — no build step needed.
+
+On restart, run `tsc --noEmit` first to type-check the code. If it fails, abort the restart and keep the old process running. This prevents the agent from killing itself with a bad edit.
 
 Use a PID file (`.logos.pid`) at the project root and write logs to `logs/`. Both are already gitignored.
 
