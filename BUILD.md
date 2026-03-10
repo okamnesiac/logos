@@ -78,9 +78,11 @@ Use the Vercel AI SDK's `generateText` for automatic tool execution. Limit the n
 - The system prompt is assembled from: `SOUL.md` (identity) + `memory.md` (long-term context) + a summary of available skills (names and descriptions from `skills/*/SKILL.md` frontmatter)
 - The agent receives conversation history (the current message is already the last entry). Pass it directly to the SDK as the messages array.
 - Cap conversation history at 50 messages (most recent) to avoid blowing past token limits. Apply the cap when retrieving history, not in the agent.
+- Guard against oversized prompts. Estimate tokens using a 4:1 character-to-token ratio. First, truncate any individual message over 10,000 tokens. Then, if the total (system prompt + messages) exceeds 150,000 tokens, drop the oldest messages until it fits.
 
 Start with a minimal set of tools:
 
+- **read_file** — read a file from the project directory. Takes a relative path, returns the file contents. Reject paths that escape the project root (e.g. `../` or absolute paths).
 - **remember** — append a note to today's file in `memories/` (e.g. `memories/2026-03-09.md`)
 - **recall** — read `memory.md` and optionally search recent daily files in `memories/`
 - **shell** — run a shell command asynchronously using bash on the host (project root as cwd, 1 MB output limit). Don't block the event loop. The tool description should tell the agent to let the user know before running long commands, since the conversation pauses during execution.

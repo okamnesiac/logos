@@ -21,6 +21,7 @@ Read `SOUL.md` first, every time you wake. That file defines who you are — you
 
 Core tools are defined in code:
 
+- **read_file** — read any file in the project directory
 - **remember** — store a fact for later recall
 - **recall** — retrieve relevant memories
 - **shell** — run a shell command on the host (use responsibly)

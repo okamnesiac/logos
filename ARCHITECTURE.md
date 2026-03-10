@@ -85,7 +85,7 @@ The agent is the brain. It uses the Vercel AI SDK to:
 - Decide how to respond, optionally using tools
 - Return a response
 
-**Tools** are typed capabilities defined in code: `remember`, `recall`, and `shell`. The AI SDK handles tool execution loops natively — limit the number of steps to prevent runaway tool use.
+**Tools** are typed capabilities defined in code: `read_file`, `remember`, `recall`, and `shell`. The AI SDK handles tool execution loops natively — limit the number of steps to prevent runaway tool use.
 
 **Skills** teach the agent how to do more complex things using its tools. Skills are markdown files following the [Agent Skills](https://agentskills.io) open standard — see the Skills section below for details.
 
@@ -220,6 +220,7 @@ Implementation details for specific channels and capabilities live in `recipes/`
 
 - The agent runs with shell access and the same permissions as the host user. Consider running it on a dedicated machine or in a container.
 - The **shell tool** runs commands using bash from the project root with a 1 MB output limit. The agent should confirm destructive commands with the user before running them.
+- **Never log credentials.** When catching errors, log only the error message — not full objects, which may contain API tokens or bot secrets.
 - Messaging credentials are stored as environment variables
 - The SQLite database contains all your messages — protect it accordingly
 
