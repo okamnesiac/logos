@@ -74,7 +74,8 @@ Use the Vercel AI SDK's `generateText` for automatic tool execution. Limit the n
 - Use the `@ai-sdk/anthropic` provider by default
 - Read the model from the `AI_MODEL` environment variable with a sensible default
 - The system prompt is assembled from: `SOUL.md` (identity) + `memory.md` (long-term context) + a summary of available skills (names and descriptions from `skills/*/SKILL.md` frontmatter)
-- The agent receives conversation history (the current message is already the last entry). Pass it directly to the SDK as the messages array. Cap history at 50 messages to avoid blowing past token limits.
+- The agent receives conversation history (the current message is already the last entry). Pass it directly to the SDK as the messages array.
+- Cap conversation history at 50 messages (most recent) to avoid blowing past token limits. Apply the cap when retrieving history, not in the agent.
 
 Start with a minimal set of tools:
 
