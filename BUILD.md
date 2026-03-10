@@ -48,9 +48,9 @@ Channel-specific variables are listed in each recipe.
 
 SQLite stores **messages only**. Create a single table:
 
-- **messages** — channelId, conversationId, senderId, senderName, text, timestamp, direction (inbound/outbound)
+- **messages** — channelId, conversationId, role (`user` or `assistant`), text, timestamp
 
-Export functions for storing and retrieving messages and conversation history.
+Don't open the database connection at import time — initialize it in a function that `index.ts` calls at startup. Export functions for storing and retrieving messages and conversation history.
 
 Everything else (memory, tasks, conversation context) lives on the filesystem — see `ARCHITECTURE.md` for details.
 
@@ -58,7 +58,7 @@ Everything else (memory, tasks, conversation context) lives on the filesystem �
 
 The router:
 
-- Accepts incoming messages from channels in the common message format (see ARCHITECTURE.md)
+- Accepts incoming messages from channels (channelId, conversationId, text, timestamp)
 - Queues messages per-conversation so only one agent invocation runs per conversation at a time
 - Passes messages to the agent with recent conversation history
 - Sends agent responses back via a callback to the originating channel
@@ -78,7 +78,7 @@ Start with a minimal set of tools:
 - **recall** — read `memory.md` and optionally search recent daily files in `memories/`
 - **shell** — run a shell command on the host
 
-Skills are markdown instruction files in `skills/` that follow the [Agent Skills](https://agentskills.io) standard. At startup, scan `skills/` for directories containing `SKILL.md`, parse the YAML frontmatter with `js-yaml` to extract each skill's `name` and `description`, and include them in the system prompt so the agent knows what's available. When the agent decides to use a skill, it reads the full `SKILL.md` for instructions.
+Skills are markdown instruction files in `skills/` that follow the [Agent Skills](https://agentskills.io) standard. At startup, scan `skills/` for directories containing `SKILL.md`, extract the YAML frontmatter block (between `---` delimiters), parse it with `js-yaml` (not regex) to get each skill's `name` and `description`, and include them in the system prompt so the agent knows what's available. When the agent decides to use a skill, it reads the full `SKILL.md` for instructions.
 
 ### 5. Build the channel registry (`src/channels/registry.ts`)
 

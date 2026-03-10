@@ -52,15 +52,13 @@ Channels are messaging platform integrations. Each channel is responsible for:
 ```
 {
   channelId: string       // e.g. "whatsapp", "telegram"
-  conversationId: string  // unique ID for the conversation/group
-  senderId: string        // who sent the message
-  senderName: string      // display name
+  conversationId: string  // unique ID for the conversation
   text: string            // message content
   timestamp: Date
-  replyTo?: string        // optional message ID being replied to
-  attachments?: []        // optional media attachments
 }
 ```
+
+All inbound messages are from the owner. Multi-user support (group chats with other people) can be added later.
 
 Each channel lives in its own file under `src/channels/`. Adding a new channel means adding a single file that exports a `register` function.
 
@@ -99,7 +97,7 @@ Logos uses two storage mechanisms — SQLite for structured data and the filesys
 
 SQLite stores message history:
 
-- **messages** — channelId, conversationId, senderId, senderName, text, timestamp, direction (inbound/outbound)
+- **messages** — channelId, conversationId, role (`user` or `assistant`), text, timestamp
 
 `messages.db` lives at the project root alongside the other data files. Back it up by copying it. Inspect it with any SQLite client.
 
