@@ -130,7 +130,7 @@ Run the process with `npx tsx src/index.ts` (not compiled JS). This way the agen
 
 On restart, run `tsc --noEmit` first to type-check the code. If it fails, abort the restart and keep the old process running. This prevents the agent from killing itself with a bad edit.
 
-Use a PID file (`.logos.pid`) at the project root and write logs to `logs/`. Both are already gitignored.
+Use a PID file (`.logos.pid`) at the project root and write logs to `logs/`. Both are already gitignored. Append to the log file — don't truncate it on restart.
 
 After starting the background process, wait a couple of seconds and check if the PID is still alive. If it died, print the last few lines of the log so the user can see what went wrong.
 
