@@ -4,9 +4,9 @@ A blueprint for personal AI assistants that build themselves.
 
 ## Why
 
-Most AI assistants are cloud services, black boxes, and multi-tenant systems. You can't inspect them, modify them, or own them.
+[OpenClaw](https://github.com/openclaw/openclaw) demonstrates that local AI assistants are incredibly useful. But it is also a large and complex system.
 
-Logos takes a different approach. It's an architecture specification — a set of documents precise enough that an AI coding agent can read them and generate a working personal assistant from scratch. Your assistant runs locally, stores its memory in readable files, and is small enough to understand completely.
+Logos explores the opposite extreme: a minimal assistant architecture built from readable files. It's an architecture specification — a set of documents precise enough that an AI coding agent can read them and generate a working personal assistant from scratch.
 
 ## How it works
 
