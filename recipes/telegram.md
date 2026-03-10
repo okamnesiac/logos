@@ -28,4 +28,5 @@ Supports text, photos, documents, voice messages, and stickers. For non-text con
 - **`bot.start()` blocks forever.** It runs long polling and does not resolve until the bot stops. Don't await it during registration or it will block the entire process. Fire and forget it.
 - **Message length limit.** Telegram caps messages at 4096 characters. The agent can easily exceed this. Split long replies into multiple messages.
 - **Typing indicator expires.** Telegram's typing indicator lasts about 5 seconds. If the agent takes longer, re-send the typing action periodically until the response is ready.
+- **Markdown formatting.** The agent responds with Markdown, but grammY sends plain text by default. Set `parse_mode` to `"Markdown"` when sending messages so formatting renders correctly.
 - grammY handles long polling natively — no webhook or HTTP server needed.

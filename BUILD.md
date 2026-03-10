@@ -53,7 +53,7 @@ SQLite stores **messages only**. Create a single table:
 
 - **messages** — channelId, conversationId, role (`user` or `assistant`), text, timestamp
 
-Store the database file in `data/chat.sqlite`. Create the `data/` directory if it doesn't exist. Don't open the database connection at import time — initialize it in a function that `index.ts` calls at startup. Export functions for storing and retrieving messages and conversation history.
+Store the database file in `data/chat.sqlite`. The initialization function should create the `data/` directory at runtime if it doesn't exist. Don't open the database connection at import time — initialize it in a function that `index.ts` calls at startup. Export functions for storing and retrieving messages and conversation history.
 
 Everything else (memory, skills, cron) lives on the filesystem — see `ARCHITECTURE.md` for details.
 
