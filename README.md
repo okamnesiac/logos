@@ -30,7 +30,7 @@ More specifically:
 1. **Fork this repository**
 2. **Point your AI coding agent at it** (Claude Code, Codex, etc.)
 3. **Tell the agent:** `bootstrap telegram` (or whichever channel you want)
-   - The agent will create files and run commands. Approve its edits — it's building the whole codebase for you.
+  - The agent will create files and run commands. Approve its edits — it's building the whole codebase for you.
 4. **Fill in your API keys** in `.env`
 5. **Start it** — `./logos start`
 6. **Send it a message** — on first run, it'll ask for a name and personality
@@ -43,7 +43,7 @@ A personal AI assistant that:
 
 - Runs as a single Node.js process on your machine
 - Connects to your messaging apps (Telegram, WhatsApp, Discord, Slack, etc.)
-- Uses Claude as its brain (model-agnostic via the Vercel AI SDK)
+- Uses any LLM you choose (model-agnostic via the Vercel AI SDK)
 - Has a personality you define in `SOUL.md`
 - Remembers things in markdown files you can read and edit
 - Runs scheduled tasks on your behalf
@@ -55,7 +55,7 @@ A personal AI assistant that:
 ```
 # The spec
 ARCHITECTURE.md     # System design — components, contracts, data flow
-BUILD.md            # Step-by-step build instructions for coding agents
+BUILD.md            # Step-by-step build instructions for the coding agent of your choice
 AGENTS.md           # Runtime behavior contract for the assistant
 SOUL.md             # Identity template — name, personality, voice
 
@@ -83,4 +83,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design.
 
 ## Inspired by
 
-[OpenClaw](https://github.com/openclaw/openclaw) and [NanoClaw](https://github.com/qwibitai/nanoclaw).
+[NanoClaw](https://github.com/qwibitai/nanoclaw) — a brilliant minimal agent runtime. Logos asks: what if you went even more fundamental and didn't write any code at all?
