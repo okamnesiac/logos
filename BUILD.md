@@ -28,9 +28,10 @@ All secrets (API keys, bot tokens) go in `.env` at the project root. This file i
 At minimum:
 
 - The API key for whichever AI provider you're using (e.g. `ANTHROPIC_API_KEY` for Anthropic)
-- `AI_MODEL` — model to use (default: latest Claude Sonnet)
+- `AI_MODEL` — model to use. Default to a sensible current model; don't pin exact version strings since model names change frequently.
+- `PRIMARY_CHANNEL` — the channel used for the owner's main conversation (e.g. `telegram`). The scheduler sends replies here.
 
-Channel-specific variables are listed in each recipe.
+Channel-specific variables (including the owner's ID on that platform) are listed in each recipe.
 
 ## Step-by-step
 
@@ -38,13 +39,13 @@ Channel-specific variables are listed in each recipe.
 
 ### 1. Initialize the project
 
-- Create `package.json` and `tsconfig.json` inside `src/`
+- Create `package.json` and `tsconfig.json` at the project root
 - Target ES2022 with Node module resolution
 - Keep configuration minimal
-- **All code and TypeScript/JavaScript configuration belongs in `src/`.** This keeps the repo root clean — everything outside `src/` is markdown, YAML, and data that the agent and user interact with directly.
-- Create a `.env` file at the project root with the API key for the chosen provider, `AI_MODEL`, and any channel-specific variables. Leave the API key blank for the user to fill in.
+- Source code lives in `src/`. Everything else at the root is markdown, YAML, and data.
+- Create a `.env` file at the project root with the API key for the chosen provider, `AI_MODEL`, `PRIMARY_CHANNEL`, and any channel-specific variables (including the owner ID — see the recipe). Leave secrets blank for the user to fill in.
 
-### 2. Set up the database (`src/db.ts`)
+### 2. Set up the database
 
 SQLite stores **messages only**. Create a single table:
 
@@ -54,7 +55,7 @@ Store the database file in `data/chat.sqlite`. Don't open the database connectio
 
 Everything else (memory, skills, cron) lives on the filesystem — see `ARCHITECTURE.md` for details.
 
-### 3. Build the router (`src/router.ts`)
+### 3. Build the router
 
 The router:
 
@@ -64,7 +65,7 @@ The router:
 - If the agent responds with the exact string `NO_REPLY`, discard it — don't store or send anything
 - Otherwise, sends agent responses back via a callback to the originating channel
 
-### 4. Build the agent (`src/agent.ts`)
+### 4. Build the agent
 
 Use the Vercel AI SDK's `generateText` for automatic tool execution. Limit the number of tool-use steps to prevent runaway loops. Do not manually implement a tool loop.
 
@@ -81,27 +82,26 @@ Start with a minimal set of tools:
 
 Skills are markdown instruction files in `skills/` that follow the [Agent Skills](https://agentskills.io) standard. At startup, scan `skills/` for directories containing `SKILL.md`, extract the YAML frontmatter block (between `---` delimiters), parse it with `js-yaml` (not regex) to get each skill's `name` and `description`, and include them in the system prompt so the agent knows what's available. When the agent decides to use a skill, it reads the full `SKILL.md` for instructions.
 
-### 5. Build the channel registry (`src/channels/registry.ts`)
+### 5. Build the channel registry
 
-- Scan the `src/channels/` directory for channel files
-- Call each channel's `register()` function with the router
+- Import each channel statically and call its `register()` function with the router — no runtime file scanning
 - A channel's `register()` returns whether it connected successfully (may be async) — `true` if it connected, `false` if credentials were missing and it skipped
 - Count the channels that actually connected. If zero, the process should exit with a clear error — there's nothing to connect to.
 
 ### 6. Build the user's chosen channel
 
-Read the recipe file in `recipes/` for the channel the user chose. Follow its setup instructions. Get the full loop working end-to-end before adding anything else.
+Read the recipe file in `recipes/` for the channel the user chose. Follow its setup instructions. The channel must only forward messages from the owner (identified by the owner ID in the recipe's environment variables) and silently ignore everyone else. Get the full loop working end-to-end before adding anything else.
 
-### 7. Build the scheduler (`src/scheduler.ts`)
+### 7. Build the scheduler
 
 - On startup, parse `cron/config.yaml` — jobs are under the `jobs:` key, each with a `name` and `cron` expression
 - Use `node-cron` to schedule each job
 - When a job fires, check for an inline `prompt` field first. If none, look for `cron/{name}.md` by convention.
-- Send the prompt to the agent through the router as a synthetic message
+- Send the prompt to the agent through the router as a synthetic message on the primary channel, addressed to the owner's main conversation
 
 The heartbeat is just a cron job (`*/30 * * * *`) — no special implementation needed. It's already defined in `cron/config.yaml`.
 
-### 8. Wire it all together (`src/index.ts`)
+### 8. Wire it all together
 
 The entry point:
 
@@ -121,13 +121,17 @@ Create a simple bash script at the project root called `logos` that supports:
 - `./logos restart` — restart it
 - `./logos status` — check if it's running
 
-Run the process with `tsx index.ts` (not compiled JS). This way the agent can modify its own TypeScript source and restart to apply changes — no build step needed.
+Run the process with `tsx src/index.ts` (not compiled JS). This way the agent can modify its own TypeScript source and restart to apply changes — no build step needed.
 
 On restart, run `tsc --noEmit` first to type-check the code. If it fails, abort the restart and keep the old process running. This prevents the agent from killing itself with a bad edit.
 
 Use a PID file (`.logos.pid`) at the project root and write logs to `logs/`. Both are already gitignored.
 
 After starting the background process, wait a couple of seconds and check if the PID is still alive. If it died, print the last few lines of the log so the user can see what went wrong.
+
+### 10. Validate
+
+Run the scenarios in `evals/` to verify the build works end-to-end. Each file describes a test case — follow the steps and confirm the expected behavior.
 
 ## When you're done
 

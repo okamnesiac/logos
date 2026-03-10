@@ -44,7 +44,11 @@ Channels are messaging platform integrations. Each channel is responsible for:
 - Receiving inbound messages and normalizing them into a common format
 - Sending outbound messages from the agent back to the platform
 
+**Owner-only:** Each channel knows the owner's ID on that platform (e.g., `TELEGRAM_OWNER_CHAT_ID`). Messages from anyone else are silently ignored. Multi-user support can be added later.
+
 **Self-registering:** A channel only activates if its credentials are present in the environment. No credentials, no channel — no errors, no configuration needed.
+
+**Main chat:** The `PRIMARY_CHANNEL` environment variable names the channel used for the owner's main conversation (e.g., `telegram`). The scheduler sends replies to the owner's conversation on this channel instead of logging them silently.
 
 **Common message format:**
 
@@ -57,9 +61,7 @@ Channels are messaging platform integrations. Each channel is responsible for:
 }
 ```
 
-All inbound messages are from the owner. Multi-user support (group chats with other people) can be added later.
-
-Each channel lives in its own file under `src/channels/`. Adding a new channel means adding a single file that exports a `register` function.
+Each channel lives in its own file under `src/channels/`. Adding a new channel means editing the channel registry to import and register it.
 
 ### 2. Router
 
@@ -114,7 +116,7 @@ Everything else lives in plain files:
 
 ### 5. Scheduler
 
-The scheduler runs cron jobs defined in `cron/config.yaml` under the `jobs:` key. Each job has a `name` and `cron` expression. When a job fires, the scheduler checks for an inline `prompt` first. If none, it looks for `cron/{name}.md` by convention. The prompt is sent to the agent through the router as a synthetic message.
+The scheduler runs cron jobs defined in `cron/config.yaml` under the `jobs:` key. Each job has a `name` and `cron` expression. When a job fires, the scheduler checks for an inline `prompt` first. If none, it looks for `cron/{name}.md` by convention. The prompt is sent to the agent through the router as a synthetic message on the primary channel, addressed to the owner's main conversation.
 
 The heartbeat is just a cron job that runs every 30 minutes — no special implementation needed.
 
@@ -147,23 +149,20 @@ The typical flow: the agent edits a file, sends a message explaining what it cha
 ## File structure
 
 ```
-# Code — all code, package.json, and tsconfig live here.
-# This keeps the repo root clean: everything outside src/ is
-# human-readable files (markdown, YAML) and data.
+# Project root
+package.json        # Dependencies
+tsconfig.json       # TypeScript config
+
+# Code
 src/
-  package.json      # Dependencies
-  tsconfig.json     # TypeScript config
   index.ts          # Entry point — starts everything
   router.ts         # Message routing and conversation queue
   agent.ts          # AI SDK wrapper
   db.ts             # SQLite operations (messages only)
   scheduler.ts      # Cron scheduler
   channels/
-    registry.ts     # Channel auto-discovery and registration
-    whatsapp.ts     # WhatsApp channel
+    registry.ts     # Static channel registration
     telegram.ts     # Telegram channel
-    discord.ts      # Discord channel
-    slack.ts        # Slack channel
     ...             # One file per channel
 
 # Data
@@ -183,6 +182,7 @@ logs/               # Runtime logs (gitignored)
 skills/             # Agent skills (agentskills.io format)
   self-edit/
     SKILL.md
+evals/              # Validation scenarios for testing the build
 recipes/            # Implementation guides for channels and capabilities
   telegram.md
   whatsapp.md
@@ -201,9 +201,9 @@ A channel is a single file that exports a `register` function. The function take
 
 1. Checks if its credentials exist (e.g., the `TELEGRAM_BOT_TOKEN` environment variable)
 2. If not, returns `false`
-3. If yes, connects to the platform, starts forwarding messages to the router, and returns `true`
+3. If yes, connects to the platform, starts forwarding messages from the owner to the router (ignoring all others), and returns `true`
 
-That's it. No configuration files, no plugin manifests.
+The channel registry imports and registers each channel statically — no runtime file scanning. Adding a new channel means adding the channel file and importing it in the registry.
 
 ### Recipes
 
@@ -218,7 +218,16 @@ Implementation details for specific channels and capabilities live in `recipes/`
 
 ## Security considerations
 
-- The agent runs directly on the host with the same permissions as the user
+- The agent runs with shell access and the same permissions as the host user. Consider running it on a dedicated machine or in a container.
 - The **shell tool** runs commands from the project root with a 30-second timeout and a 1 MB output limit. The agent should confirm destructive commands with the user before running them.
 - Messaging credentials are stored as environment variables
 - The SQLite database contains all your messages — protect it accordingly
+
+## Non-goals
+
+These are intentionally left out of the spec. They may be added later.
+
+- **Multi-user conversations** — all messages are assumed to be from the owner
+- **Multiple AI providers at once** — one provider per deployment
+- **Web UI or dashboard** — the messaging app is the interface
+- **Plugin system** — channels and skills are just files, not a formal plugin API
