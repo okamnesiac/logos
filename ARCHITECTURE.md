@@ -205,14 +205,14 @@ recipes/            # Implementation guides for channels and capabilities
 A channel is a single file that exports:
 
 ```typescript
-export function register(router: Router): void
+export function register(router: Router): boolean
 ```
 
 Inside `register`, the channel:
 
 1. Checks if its credentials exist (e.g., `process.env.TELEGRAM_BOT_TOKEN`)
-2. If not, returns silently
-3. If yes, connects to the platform and starts forwarding messages to the router
+2. If not, returns `false`
+3. If yes, connects to the platform, starts forwarding messages to the router, and returns `true`
 
 That's it. No configuration files, no plugin manifests.
 
