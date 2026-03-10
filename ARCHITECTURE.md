@@ -219,7 +219,7 @@ Implementation details for specific channels and capabilities live in `recipes/`
 ## Security considerations
 
 - The agent runs with shell access and the same permissions as the host user. Consider running it on a dedicated machine or in a container.
-- The **shell tool** runs commands using bash from the project root with a 30-second timeout and a 1 MB output limit. The agent should confirm destructive commands with the user before running them.
+- The **shell tool** runs commands using bash from the project root with a 1 MB output limit. The agent should confirm destructive commands with the user before running them.
 - Messaging credentials are stored as environment variables
 - The SQLite database contains all your messages — protect it accordingly
 

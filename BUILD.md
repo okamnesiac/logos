@@ -83,7 +83,7 @@ Start with a minimal set of tools:
 
 - **remember** — append a note to today's file in `memories/` (e.g. `memories/2026-03-09.md`)
 - **recall** — read `memory.md` and optionally search recent daily files in `memories/`
-- **shell** — run a shell command asynchronously using bash on the host (project root as cwd, 30-second timeout, 1 MB output limit). Don't block the event loop.
+- **shell** — run a shell command asynchronously using bash on the host (project root as cwd, 1 MB output limit). Don't block the event loop. The tool description should tell the agent to let the user know before running long commands, since the conversation pauses during execution.
 
 Skills are markdown instruction files in `skills/` that follow the [Agent Skills](https://agentskills.io) standard. At startup, scan `skills/` for directories containing `SKILL.md`, extract the YAML frontmatter block (between `---` delimiters), parse it with `js-yaml` (not regex) to get each skill's `name` and `description`, and include them in the system prompt so the agent knows what's available. When the agent decides to use a skill, it reads the full `SKILL.md` for instructions.
 
