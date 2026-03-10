@@ -126,6 +126,8 @@ On restart, run `tsc --noEmit` first to type-check the code. If it fails, abort 
 
 Use a PID file (`.logos.pid`) at the project root and write logs to `logs/`. Both are already gitignored.
 
+After starting the background process, wait a couple of seconds and check if the PID is still alive. If it died, print the last few lines of the log so the user can see what went wrong.
+
 ## When you're done
 
 Remove the reference to this file from `AGENTS.md`. The build is complete.
