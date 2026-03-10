@@ -2,3 +2,5 @@ messages.db
 .env
 src/node_modules/
 src/dist/
+*.pid
+logs/

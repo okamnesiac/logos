@@ -28,7 +28,7 @@ All secrets (API keys, bot tokens) go in `.env` at the project root. This file i
 
 At minimum:
 
-- `ANTHROPIC_API_KEY` — required for the default Anthropic provider
+- The API key for whichever AI provider you're using (e.g. `ANTHROPIC_API_KEY` for Anthropic)
 - `AI_MODEL` — model to use (default: latest Claude Sonnet)
 - `ASSISTANT_NAME` — your assistant's name (default: `Logos`)
 
@@ -44,6 +44,7 @@ Channel-specific variables are listed in each recipe.
 - Target ES2022 with Node module resolution
 - Keep configuration minimal
 - **All code and TypeScript/JavaScript configuration belongs in `src/`.** Everything outside `src/` is markdown, YAML, and data — human-readable files the agent and user interact with directly.
+- Create a `.env` file at the project root with the API key for the chosen provider, `AI_MODEL`, `ASSISTANT_NAME`, and any channel-specific variables. Leave the API key blank for the user to fill in.
 
 ### 2. Set up the database (`src/db.ts`)
 
@@ -126,7 +127,7 @@ Create a simple bash script at the project root called `logos` that supports:
 - `./logos restart` — restart it
 - `./logos status` — check if it's running
 
-Use a PID file to track the running process.
+Use a PID file (`.logos.pid`) at the project root and write logs to `logs/`. Both are already gitignored.
 
 ## When you're done
 
