@@ -1,16 +1,14 @@
-# Bootstrap
+# Build
 
 Step-by-step instructions for building Logos from the architecture spec. Read `ARCHITECTURE.md` first.
 
 ## Before you start
 
-You need three things before writing any code. The user may provide them inline (e.g. "bootstrap Diff telegram witty") or you can ask:
+You need one thing before writing any code:
 
-1. **Name** — What should your assistant be called?
-2. **Primary channel** — Which messaging platform do you want to connect first? (Telegram, WhatsApp, Discord, Slack, etc.)
-3. **Personality** — Describe your assistant's personality and tone. (casual, formal, terse, witty, etc.) Use the answers to populate `SOUL.md`.
+- **Primary channel** — Which messaging platform do you want to connect first? (Telegram, WhatsApp, Discord, Slack, etc.)
 
-The chosen name should be set as `ASSISTANT_NAME` in `.env`. The code should read it from there rather than hardcoding it.
+Don't worry about the assistant's name or personality — those are configured on first run through the messaging channel itself. Leave `SOUL.md` as-is.
 
 ## Key packages
 
@@ -31,7 +29,6 @@ At minimum:
 
 - The API key for whichever AI provider you're using (e.g. `ANTHROPIC_API_KEY` for Anthropic)
 - `AI_MODEL` — model to use (default: latest Claude Sonnet)
-- `ASSISTANT_NAME` — your assistant's name (default: `Logos`)
 
 Channel-specific variables are listed in each recipe.
 
@@ -45,7 +42,7 @@ Channel-specific variables are listed in each recipe.
 - Target ES2022 with Node module resolution
 - Keep configuration minimal
 - **All code and TypeScript/JavaScript configuration belongs in `src/`.** Everything outside `src/` is markdown, YAML, and data — human-readable files the agent and user interact with directly.
-- Create a `.env` file at the project root with the API key for the chosen provider, `AI_MODEL`, `ASSISTANT_NAME`, and any channel-specific variables. Leave the API key blank for the user to fill in.
+- Create a `.env` file at the project root with the API key for the chosen provider, `AI_MODEL`, and any channel-specific variables. Leave the API key blank for the user to fill in.
 
 ### 2. Set up the database (`src/db.ts`)
 
@@ -131,4 +128,4 @@ Use a PID file (`.logos.pid`) at the project root and write logs to `logs/`. Bot
 
 ## When you're done
 
-Remove the reference to this file from `AGENTS.md` and delete `BOOTSTRAP.md`. It has served its purpose.
+Remove the reference to this file from `AGENTS.md` and delete `BUILD.md`. It has served its purpose.

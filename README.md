@@ -10,8 +10,10 @@ Logos is not a framework, library, or application. It's an architecture specific
 
 1. **Fork this repository**
 2. **Point your AI coding agent at it** (Claude Code, Cursor, etc.)
-3. **Tell the agent to read `AGENTS.md` and bootstrap the project**
-4. **Customize** — add channels, change the model, make it yours
+3. **Tell the agent to read `AGENTS.md` and build the project**
+4. **Fill in your API keys** in `.env`
+5. **Start it** — `./logos start`
+6. **Send it a message** — on first run, it'll ask for a name and personality
 
 ## What you get
 
@@ -49,9 +51,9 @@ These are defaults, not requirements. Fork and change whatever you want.
 ```
 # Agent configuration
 AGENTS.md           # Agent instructions (reads SOUL.md, memory, etc.)
-SOUL.md             # Agent personality, voice, and values
+SOUL.md             # Agent name, personality, voice, and values
 ARCHITECTURE.md     # System design — how it all fits together
-BOOTSTRAP.md        # One-time build instructions (delete after use)
+BUILD.md            # One-time build instructions (delete after use)
 
 # Data
 messages.db         # SQLite message history (gitignored)

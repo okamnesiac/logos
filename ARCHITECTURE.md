@@ -107,7 +107,7 @@ SQLite stores message history:
 
 Everything else lives in plain files:
 
-**`SOUL.md`** — The agent's identity. Personality, voice, values, opinions. The agent reads this first, every time it wakes — it reads itself into being. Edit this file to change who your assistant is.
+**`SOUL.md`** — The agent's identity: name, personality, voice, values. The agent reads this first, every time it wakes — it reads itself into being. On first run, the agent asks the user for a name and personality, then writes this file. Edit it anytime to change who your assistant is.
 
 **`memory.md`** — The agent's consolidated long-term memory. Key facts, user preferences, important context that persists across all conversations. The agent reads this at the start of every invocation.
 
