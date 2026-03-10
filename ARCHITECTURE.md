@@ -160,7 +160,7 @@ src/
   router.ts         # Message routing and conversation queue
   agent.ts          # AI SDK wrapper
   db.ts             # SQLite operations (messages only)
-  scheduler.ts      # Heartbeat and cron runner
+  scheduler.ts      # Cron scheduler
   channels/
     registry.ts     # Channel auto-discovery and registration
     whatsapp.ts     # WhatsApp channel

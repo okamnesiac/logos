@@ -19,11 +19,10 @@ A personal AI assistant that:
 
 - Runs as a single Node.js process on your own machine
 - Connects to your messaging apps (WhatsApp, Telegram, Discord, Slack, etc.)
-- Uses Claude as its brain (via the Anthropic Agent SDK)
+- Uses Claude as its brain (via the Vercel AI SDK — model-agnostic)
 - Has a personality you define in `SOUL.md`
 - Remembers things in markdown files you can read and edit
 - Runs scheduled tasks and periodic check-ins on your behalf
-- Understands and speaks in voice messages
 - Is small enough to understand completely
 
 ## Guiding principles

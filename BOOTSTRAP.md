@@ -17,7 +17,7 @@ The chosen name should be set as `ASSISTANT_NAME` in `.env`. The code should rea
 - `ai` — **Vercel AI SDK**. Provides `generateText` with built-in tool execution via `maxSteps`. Do not manually implement a tool loop.
 - `@ai-sdk/anthropic` — Anthropic provider for the AI SDK (default). Can be swapped for `@ai-sdk/openai`, `@ai-sdk/google`, etc.
 - `better-sqlite3` — SQLite driver
-- `js-yaml` — YAML parsing for `cron/config.yaml`
+- `js-yaml` — YAML parsing for cron config and skill frontmatter
 - `node-cron` — cron expression scheduling
 - `tsx` — TypeScript execution without a build step. The agent can modify its own source and restart to apply changes.
 - `dotenv` — load environment variables from `.env`
@@ -108,7 +108,7 @@ The entry point:
 
 1. Initializes the database
 2. Registers channels
-3. Starts the scheduler (heartbeat + cron jobs)
+3. Starts the scheduler
 4. Logs that it's running
 
 That's it. No HTTP server needed unless a channel requires a webhook.
