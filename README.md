@@ -1,4 +1,4 @@
-# Logos — the ProtoClaw
+# Logos — a ProtoClaw
 
 A zero-code blueprint for building your own personal AI assistant. Inspired by [OpenClaw](https://github.com/openclaw/openclaw) and [NanoClaw](https://github.com/qwibitai/nanoclaw).
 
@@ -9,8 +9,9 @@ Logos is not a framework, library, or application. It's an architecture specific
 ## How to use
 
 1. **Fork this repository**
-2. **Point your AI coding agent at it** (Claude Code, Cursor, etc.)
-3. **Tell the agent to read `AGENTS.md` and build the project**
+2. **Point your AI coding agent at it** (Claude Code, Codex, etc.)
+3. **Tell the agent:** `bootstrap telegram` (or whatever channel you want to be primary)
+   - The agent will create files and run commands. Approve its edits — it's building the whole codebase for you.
 4. **Fill in your API keys** in `.env`
 5. **Start it** — `./logos start`
 6. **Send it a message** — on first run, it'll ask for a name and personality
@@ -36,13 +37,15 @@ A personal AI assistant that:
 
 ## Default tech stack
 
-| Component | Choice |
-|-----------|--------|
-| Runtime | Node.js 22+ |
-| Language | TypeScript |
-| Database | SQLite (messages only) |
-| AI | Vercel AI SDK with Anthropic provider (model-agnostic) |
-| Hosting | Runs directly on the host — no containers |
+
+| Component | Choice                                                 |
+| --------- | ------------------------------------------------------ |
+| Runtime   | Node.js 22+                                            |
+| Language  | TypeScript                                             |
+| Database  | SQLite (messages only)                                 |
+| AI        | Vercel AI SDK with Anthropic provider (model-agnostic) |
+| Hosting   | Runs directly on the host — no containers              |
+
 
 These are defaults, not requirements. Fork and change whatever you want.
 
