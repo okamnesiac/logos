@@ -27,7 +27,7 @@ The agent reads the spec and generates the assistant.
 
 More specifically:
 
-1. **Fork this repository**
+1. **Create your own copy** — GitHub doesn't allow private forks of public repos, so [import this repository](https://github.com/new/import) as a new private repo instead
 2. **Point your AI coding agent at it** (Claude Code, Codex, etc.)
 3. **Tell the agent:** `bootstrap telegram` (or whichever channel you want)
   - The agent will create files and run commands. Approve its edits — it's building the whole codebase for you.

@@ -28,7 +28,7 @@ Logos is a single-process personal AI assistant. Messages come in from messaging
 
 | Component | Choice |
 |-----------|--------|
-| Runtime | Node.js 22+ |
+| Runtime | Node.js 18+ |
 | Language | TypeScript |
 | Database | SQLite (messages only) |
 | AI | Vercel AI SDK (`ai`) with `@ai-sdk/anthropic` (default provider) |

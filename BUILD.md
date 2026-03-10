@@ -41,7 +41,6 @@ Channel-specific variables (including the owner's ID on that platform) are liste
 
 ### 1. Initialize the project
 
-- Ensure Node.js 22+ is installed. If not, install it.
 - Create `package.json` and `tsconfig.json` at the project root
 - Target ES2022 with Node module resolution
 - Keep configuration minimal
