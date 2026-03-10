@@ -8,11 +8,28 @@ A blueprint for personal AI assistants that build themselves.
 
 Logos explores the opposite extreme: a minimal assistant architecture built from readable files. It's an architecture specification — a set of documents precise enough that an AI coding agent can read them and generate a working personal assistant from scratch.
 
+Your assistant should be:
+
+- **local-first**
+- **owned by you**
+- **simple enough to understand**
+- **built from readable files**
+
 ## How it works
+
+You don't install Logos. You point an AI coding agent at it and say:
+
+```
+bootstrap telegram
+```
+
+The agent reads the spec and generates the assistant.
+
+More specifically:
 
 1. **Fork this repository**
 2. **Point your AI coding agent at it** (Claude Code, Codex, etc.)
-3. **Tell the agent:** `bootstrap telegram`
+3. **Tell the agent:** `bootstrap telegram` (or whichever channel you want)
    - The agent will create files and run commands. Approve its edits — it's building the whole codebase for you.
 4. **Fill in your API keys** in `.env`
 5. **Start it** — `./logos start`
