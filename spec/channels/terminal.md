@@ -84,7 +84,6 @@ When the channel receives a user message from a connected client and dispatches 
 
 Don't broadcast `thinking` for messages that arrive via channels other than this one (e.g., the user typing in Telegram while a terminal is connected) — only for messages this channel itself dispatched. Cron-originated messages also skip the indicator (no one is waiting).
 
-If the agent invocation fails or returns NO_REPLY (no `send` call), the thinking indicator stays stuck. Mitigate with a server-side timeout: if no live `message` arrives for the conversation within ~60 seconds of broadcasting `thinking`, broadcast a synthetic `{"type": "message", "role": "assistant", "text": "(no reply)", "index": -1}` or just let the client decide to time out the indicator after ~60s. Client-side timeout is simpler and adequate.
 
 ## Client (`agent/logos chat`)
 
@@ -130,6 +129,7 @@ The loop should feel like a normal chat: the user types a line, sees it rendered
 - **Async output collision:** readline may have the `> ` prompt drawn when an assistant message or another client's echo arrives. Before printing any async output, clear the current line (`readline.cursorTo(out, 0); readline.clearLine(out, 0);`), print the message, then `rl.prompt()` again. Otherwise the prompt and message smash onto the same line (`> logos: ...`).
 - **Labels:** use consistent labels for user and assistant in the transcript. `you:` and `logos:` (or equivalent — pick one style and use it everywhere). The input prompt (`> `) is visual, not a label; it never appears in the rendered transcript.
 
+
 ### Thinking indicator (client)
 
 The indicator is just a **prompt swap**. No separate line, no animation, no "logos is thinking" text.
@@ -144,6 +144,6 @@ On `{"type": "thinking"}`:
 On `{"type": "message"}` (any role) OR client-side ~60 s timeout:
 
 - `rl.setPrompt("> ")` and redraw the prompt line.
-- The 60 s timeout protects against a stuck indicator if the agent crashed or returned `NO_REPLY`. No special "[no reply]" output — just restore the prompt.
+- The 60 s timeout is a safety net for daemon crashes; under normal operation the indicator clears as soon as the next `message` arrives.
 
 Only one indicator at a time per client; if a second `thinking` arrives while the prompt is already `… `, just reset the timeout.
