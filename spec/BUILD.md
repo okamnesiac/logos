@@ -55,6 +55,20 @@ Channel-specific variables (including the owner's ID on that platform) are liste
 - Use `process.cwd()` for the workspace root path, not `import.meta.dirname` — tsx runs in CJS mode where `import.meta.dirname` is undefined. The wrapper script ensures the process runs with the workspace root as cwd.
 - Create `config/` if it doesn't exist (the agent should do this on first run, but the build can pre-create it). Create a `config/.env` template with the API key for the chosen provider, `AI_MODEL`, `PRIMARY_CHANNEL`, and any channel-specific variables. Leave secrets blank for the user to fill in.
 
+### 1a. Initialize Git repos for agent/, config/, memory/
+
+For each of `agent/`, `config/`, `memory/`: if the directory does not already contain a `.git/`, run `git init` and make an initial commit. This is **required for `agent/`** — the safe-restart auto-revert relies on `HEAD` existing. Without this, a self-edit that crashes on startup can't be rolled back.
+
+Per-domain specifics:
+
+- **`agent/`** — write `agent/.gitignore` (ignore `node_modules/`, `*.log`, `*.pid`). Then `git add -A && git commit -m "bootstrap"`.
+- **`config/`** — write `config/.gitignore` that ignores `.env`, `.env.*` (and allows `.env.example` if used). **Never commit `.env`** — it contains secrets. After writing the gitignore and the `.env` template, `git add .gitignore && git commit -m "initial config"`. The `.env` file stays untracked.
+- **`memory/`** — write `memory/.gitignore` (ignore `.obsidian/` for Obsidian vault settings). `git add -A && git commit -m "initial state"`. If `memory/` is empty, commit just the gitignore.
+
+If any of these directories already has a `.git/`, leave it alone — the user is managing it.
+
+**Commit additional changes as you make them.** If the bootstrap process edits generated files after the initial commit (e.g., you notice a bug and fix it), make a follow-up commit. End the bootstrap with a clean working tree in each repo.
+
 ### 2. Set up message storage
 
 No database. Each conversation is an append-only JSONL file at `runtime/threads/{channelId}/{conversationId}.jsonl`. Each line is one message:
@@ -251,6 +265,10 @@ Verify the build before handing it off. Run these checks outside any sandbox so 
 - `spec/cron/heartbeat.md` and `spec/cron/consolidate-memories.md` are unchanged
 - `spec/` is untouched by the build (the bootstrap only writes to `agent/` and optionally creates `config/`)
 - The wrapper script is executable (`chmod +x agent/logos`)
+- `git -C agent log --oneline` shows at least one commit (the `bootstrap` anchor — critical for safe-restart auto-revert)
+- `git -C agent status` is clean (no uncommitted changes)
+- `git -C config log --oneline` shows at least one commit; `config/.env` is NOT in the commit
+- `git -C memory log --oneline` shows at least one commit
 
 ## Sandboxing (optional, for hard self-edit enforcement)
 
