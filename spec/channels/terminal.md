@@ -51,7 +51,13 @@ When a client connects:
 3. Server emits `{"type": "live-start"}` to signal the client is caught up.
 4. Server subscribes to the JSONL file via `fs.watch` and streams new appends as `message` events.
 
-The client stores its cursor at `runtime/clients/{session}.cursor` (default session: `chat`). This gives each client "pick up where I left off" semantics across reconnects. Messages queued while no client was connected (e.g., cron firing when the terminal is closed) are replayed on next connect.
+The client stores its cursor at `runtime/clients/{session}.cursor` (default session: `chat`). The default replay window on connect is computed as `from = min(stored_cursor, total - 20)` — show **at least the last 20 messages** for context, plus everything queued since the last disconnect if that span is longer. This means:
+
+- A fresh `agent/logos chat` in an existing conversation always shows recent context (not an empty screen).
+- Messages queued while disconnected (e.g., cron firing overnight) are never skipped.
+- Whichever span is longer — "last 20" or "since cursor" — is the one you see.
+
+The flags `--from-start`, `--last N`, and `--new` override this default.
 
 ## Owner filtering
 
@@ -66,15 +72,44 @@ None needed. The socket lives in the workspace filesystem; only processes with f
 
 ## Client (`agent/logos chat`)
 
-Lives at `agent/src/cli/chat.ts` — isolated from the rest of the codebase. Only imports `node:net`, `node:fs/promises`, `node:readline`, and the shared protocol types from `agent/src/channels/terminal-protocol.ts`. Does not import the router, agent, memory, or any other engine code.
+Lives at `agent/src/cli/chat.ts` — isolated from the rest of the codebase. Only imports `node:` standard library and the shared protocol types from `agent/src/channels/terminal-protocol.ts`. Does not import the router, agent, memory, or any other engine code. May additionally import thin npm packages for rendering (see below).
 
 Flags:
 
-- `agent/logos chat` — resume from stored cursor, or default to last 20 messages on first connect
+- `agent/logos chat` — show at least the last 20 messages on connect (see [Cursor-based replay](#cursor-based-replay))
 - `agent/logos chat --from-start` — replay the entire conversation
 - `agent/logos chat --last N` — replay last N messages
-- `agent/logos chat --new` — start fresh (advance cursor to end without replay)
+- `agent/logos chat --new` — advance cursor to end without replay (show only new messages from this point on)
 
 Exit with `Ctrl+D`, `/quit`, or `/exit`. Client disconnect doesn't affect the daemon.
 
 If the daemon isn't running, `chat` fails fast with: `error: daemon not running. Start it with "agent/logos start".` Don't auto-start.
+
+### Rendering
+
+The client formats assistant replies for terminal readability:
+
+- **Word-boundary wrapping.** Wrap output at the terminal width (`process.stdout.columns`, defaulting to 80 if unavailable). Preserve leading whitespace so indented content (list items, code blocks) lines up correctly on continuation lines. ANSI escape codes must not count toward visible width. Use a small well-maintained package such as [`wrap-ansi`](https://www.npmjs.com/package/wrap-ansi) — don't hand-roll the wrapping logic.
+- **Inline markdown → ANSI.** The agent replies with markdown; render the common inline styles:
+  - `**bold**` / `__bold__` → ANSI bold (`\x1b[1m` … `\x1b[22m`)
+  - `*italic*` / `_italic_` → ANSI italic (`\x1b[3m` … `\x1b[23m`)
+  - `` `code` `` → ANSI inverse or a dim color
+  - Fenced code blocks (```` ``` ````) → indented, colored if you like
+  - Headings (`# Title`) → bold, optionally with a blank line before
+  - Links `[text](url)` → show as `text (url)` or with underline on `text`
+- **User input and control messages** (your own lines, `> ` prompt, `[thinking]` indicators) are plain — no markdown parsing applied.
+- Keep it simple: small regex-based renderer, not a full markdown parser. Block-level features beyond code fences and headings can be passed through as-is.
+
+Re-render the *entire* assistant message after the wrapping pass — otherwise partial ANSI codes from one line can leak into the next.
+
+### Chat flow
+
+The loop should feel like a normal chat: the user types a line, sees it rendered in the transcript, the assistant replies, type the next line. All messages (user and assistant, live and replay) go through the **same render path** — the transcript is a canonical record of the conversation, regardless of which client sent what.
+
+- **Prompt:** `> ` (just the prompt character). This is what the user sees before typing.
+- **On Enter (before sending):** the user's typed line is visible on the prompt line (`> hello?`). The client then **clears that line** with an ANSI sequence (`\x1b[1A\r\x1b[2K` — cursor up one line, carriage return, clear line) so the line can be redrawn uniformly by the render path when the server echoes it back. Otherwise the same message appears twice — once as raw typed input, once as the rendered echo.
+- **Send to server** as `{type: "message", text: "..."}`.
+- **Server echoes via `fs.watch`:** the JSONL append triggers a broadcast; the client receives a `{type: "message", role: "user", ...}` event and renders it normally (e.g. `you: hello?`). Same render path as replay. This also means other connected clients see your message — cross-client visibility is free.
+- **Assistant reply arrives:** render as `logos:` + body (wrapped, markdown applied).
+- **Async output collision:** readline may have the `> ` prompt drawn when an assistant message or another client's echo arrives. Before printing any async output, clear the current line (`readline.cursorTo(out, 0); readline.clearLine(out, 0);`), print the message, then `rl.prompt()` again. Otherwise the prompt and message smash onto the same line (`> logos: ...`).
+- **Labels:** use consistent labels for user and assistant in the transcript. `you:` and `logos:` (or equivalent — pick one style and use it everywhere). The input prompt (`> `) is visual, not a label; it never appears in the rendered transcript.
