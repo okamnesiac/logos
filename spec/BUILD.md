@@ -195,11 +195,21 @@ The script must be invoked from the workspace root (the parent of `agent/`). It 
 
 Run the process with `npx tsx agent/src/index.ts` (not compiled JS). This way the agent can modify its own TypeScript source and restart to apply changes — no build step needed.
 
-On restart, run `tsc --noEmit` (against `agent/tsconfig.json`) first to type-check the code. If it fails, abort the restart and keep the old process running. This prevents the agent from killing itself with a bad edit.
-
 Use a PID file at `runtime/logos.pid` and write logs to `runtime/logs/`. Both are gitignored. Append to the log file — don't truncate it on restart.
 
-After starting the background process, wait a couple of seconds and check if the PID is still alive. If it died, print the last few lines of the log so the user can see what went wrong.
+**Safe-restart protocol for `restart`:**
+
+1. **Snapshot the current `agent/` HEAD.** If `agent/` is a Git repo (`agent/.git` exists), record the current commit SHA with `git -C agent rev-parse HEAD`. If it's not a Git repo, skip the rollback steps below and warn the user that self-edit rollback won't work.
+2. **Typecheck.** Run `tsc --noEmit -p agent/tsconfig.json`. If it fails, abort the restart, keep the old process running, and print the error.
+3. **Stop the old process** (if running) and **start the new one** in the background.
+4. **Health check.** Wait a few seconds (e.g. 5s) and check if the new PID is still alive. If dead:
+   - Print the last ~30 lines of the log so the user can see what crashed.
+   - If `agent/` is a Git repo and HEAD has moved since the snapshot: run `git -C agent reset --hard <snapshot-sha>` to revert the self-edit, then start the process again with the pre-edit code. Log the auto-revert clearly (`[logos] post-start check failed; auto-reverted agent to <sha> and restarted`).
+   - If no Git repo or HEAD is unchanged: leave the process stopped and tell the user to investigate.
+
+This closes the runtime-crash hole in self-edit. `tsc --noEmit` catches compile errors; the post-start health check catches runtime startup errors; Git auto-revert recovers without human intervention.
+
+Note: The auto-revert only affects the last commit (or last few commits, if the agent committed more than once since the snapshot). It does NOT revert committed changes in `config/` or `memory/` — those aren't part of self-edit.
 
 ## Before you're done
 

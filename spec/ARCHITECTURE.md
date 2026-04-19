@@ -15,7 +15,7 @@ logos/                # workspace root
   runtime/            # ephemeral state — message threads, logs, pid files
 ```
 
-Only `spec/` (and the workspace entry-point docs) is tracked by this repo. `agent/`, `config/`, `memory/`, and `runtime/` are sibling directories — gitignored here, optionally backed by their own repos (except `runtime/`, which is local-only).
+Only `spec/` (and the workspace entry-point docs) is tracked by this repo. `agent/`, `config/`, and `memory/` are sibling directories — gitignored here and **strongly recommended** to be their own Git repos (see [Git repos per domain](#git-repos-per-domain) below). `runtime/` is local-only.
 
 ## The five domains
 
@@ -156,11 +156,17 @@ When a job fires, the scheduler looks up the primary channel and sends the merge
 
 ### 5. Self-modification
 
-The agent can edit its own source code (`agent/src/`) via its shell tool. TypeScript runs directly with `tsx` — no build step. To apply code changes, the agent restarts itself using the `agent/logos restart` wrapper script.
+The agent can edit its own source code (`agent/src/`) via its file-edit tools (`write_file`, `edit_file`). TypeScript runs directly with `tsx` — no build step. To apply code changes, the agent restarts itself using the `agent/logos restart` wrapper script.
 
-The wrapper type-checks the code (`tsc --noEmit`) before restarting. If the check fails, the restart is aborted and the old process keeps running. This prevents the agent from killing itself with a bad edit.
+**Safe-edit protocol:**
 
-`spec/` is not edited by the running agent. Spec changes are made by humans (or coding agents like Claude Code) and applied by re-bootstrapping or manually updating `agent/`.
+1. The agent commits the change with a clear message using the `git` skill (requires `agent/` to be a Git repo — see [Git repos per domain](#git-repos-per-domain)).
+2. The wrapper type-checks the code (`tsc --noEmit`) before restarting. If the check fails, the restart is aborted and the old process keeps running.
+3. The wrapper starts the new process, then waits a few seconds and confirms it's still alive. If the process crashed at runtime (e.g. bad import, missing env var, startup exception), the wrapper **automatically reverts the last commit in `agent/`** and restarts with the pre-edit code.
+
+This closes the three failure modes for self-edit: compile errors (caught by typecheck), runtime startup errors (caught by post-start health check + auto-revert), and subtle logic bugs (can be manually reverted via `git` from the running agent).
+
+`spec/` is not edited by the running agent. Spec changes are made by humans (or coding agents like Claude Code) and applied by asking a coding agent to update `agent/` to match.
 
 ## Storage
 
@@ -406,9 +412,31 @@ This keeps the bootstrap simple (no manifest tracking, no merge logic) and makes
 
 Read `runtime/` to debug. Modify the source domains (`spec/`, `agent/`, `config/`, `memory/`) to fix.
 
-## Multi-machine model
+## Git repos per domain
 
-The same `memory/` repo can be shared across multiple machines running different `agent/` versions and different `config/` layers. Read access can be shared freely; write authority should be explicit. Typical model: one primary writer, or multiple writers resolving via Git.
+Each domain has its own lifecycle, so each should have its own Git repo:
+
+| Domain | Recommended? | Purpose of the repo |
+|--------|--------------|---------------------|
+| `spec/` | **Required** (this repo) | The canonical design, shared across all Logos users |
+| `agent/` | **Strongly recommended** | History and rollback for self-edits; portable across machines |
+| `config/` | **Recommended** | Sync behavior/identity across machines |
+| `memory/` | **Recommended** (private) | Durable knowledge with line-item history |
+| `runtime/` | Never | Ephemeral state, not versioned |
+
+Why `agent/` matters most: self-edit depends on it. If `agent/` is a Git repo, the wrapper can auto-revert a bad edit when the new process crashes on startup. Without a Git repo, a bad edit that passes `tsc --noEmit` but crashes at runtime becomes a manual recovery problem.
+
+**Setup** (run once, from inside each directory):
+
+```bash
+cd agent && git init && git add -A && git commit -m "bootstrap"
+cd config && git init && git add -A && git commit -m "initial config"
+cd memory && git init  # commits happen as the agent learns
+```
+
+`.env` and any other secret files should be gitignored inside `config/`.
+
+**Multi-machine model:** The same `memory/` repo can be shared across multiple machines running different `agent/` versions and different `config/` layers. Read access can be shared freely; write authority should be explicit. Typical model: one primary writer, or multiple writers resolving via Git.
 
 `runtime/` is never portable — it represents current embodiment, not identity.
 

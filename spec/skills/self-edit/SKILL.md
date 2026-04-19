@@ -5,15 +5,24 @@ description: Modify the agent's own source code and safely restart to apply chan
 
 # Self-Edit
 
-You can modify your own source code in `agent/src/`. Follow this process carefully.
+You can modify your own source code in `agent/src/`. The process is designed to be safe: compile errors are caught before restart, runtime startup crashes auto-revert the edit.
 
 ## Steps
 
-1. Make your code changes using the `edit_file` or `write_file` tools (or shell if needed for moves/deletes)
-2. Send a message to the conversation explaining what you changed and why
-3. Run `agent/logos restart` as your **last action**
+1. **Make your code changes** using `edit_file` (surgical find-and-replace) or `write_file` (for whole-file changes or new files). Prefer `edit_file` when possible — smaller, safer.
+2. **Commit the change** using the **git** skill. One commit per edit, with a clear message explaining what changed and why. This enables rollback if the restart fails.
+3. **Send a message to the conversation** explaining what you changed and why.
+4. **Run `agent/logos restart`** as your **last action**.
 
-The restart will type-check your code before applying it. If the check fails, the old process keeps running and the error is logged. You will not crash yourself.
+## Safety
+
+The wrapper protects you from self-inflicted outages:
+
+- **Compile errors:** the wrapper runs `tsc --noEmit` before restarting. If it fails, the restart is aborted and the old process keeps running.
+- **Runtime crashes:** after starting the new process, the wrapper waits a few seconds and checks if it's alive. If it crashed on startup (bad import, missing env var, startup exception), the wrapper **auto-reverts your last commit in `agent/`** and restarts with the pre-edit code.
+- **Subtle logic bugs:** if you notice the change is wrong after the fact, revert it with the **git** skill — `git revert HEAD` from inside `agent/`, then restart.
+
+This assumes `agent/` is a Git repo. If it isn't, auto-revert won't work — the wrapper will leave the broken code in place for manual recovery.
 
 ## Reference
 
@@ -25,10 +34,11 @@ Before making changes, read the relevant documentation:
 
 ## Rules
 
-- Always explain what you changed before restarting
+- Always commit before restarting — the auto-revert depends on it
+- Always explain what you changed in the conversation
 - Make small, focused changes — one thing at a time
 - For complex or multi-file changes, use the **coding** skill instead
 - If you're unsure about a change, describe it first and ask for confirmation
 - Never modify `config/.env` or files outside the workspace
 - Edit files in `agent/src/` (your implementation). Don't edit `spec/` — that's the design, shared with all Logos users; if the design needs to change, raise it with the human owner.
-- Don't put instance-specific changes in `agent/` — those belong in `config/`
+- Don't put instance-specific behavior in `agent/` — that belongs in `config/`
