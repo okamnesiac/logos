@@ -30,7 +30,7 @@ More specifically:
 1. **Create your own copy** — GitHub doesn't allow private forks of public repos, so [import this repository](https://github.com/new/import) as a new private repo instead
 2. **Point your AI coding agent at it** (Claude Code, Codex, etc.)
 3. **Tell the agent:** `bootstrap telegram` (or whichever channel you want)
-   - The agent will create files and run commands. Approve its edits — it's building the whole codebase for you.
+   - The coding agent reads `spec/` and generates the implementation in `agent/`. Approve its edits.
 4. **Fill in your API keys** in `config/.env`
 5. **Start it** — `agent/logos start`
 6. **Send it a message** — on first run, it'll ask for a name and personality
@@ -52,26 +52,28 @@ A personal AI assistant that:
 
 ## Workspace layout
 
-The workspace is split into four sibling domains. Only `agent/` is tracked by this repo; the others are gitignored and may optionally be backed by their own repos.
+The workspace is split into five sibling domains. Only `spec/` is tracked by this repo; the others are gitignored and may optionally be backed by their own repos.
 
 ```
 # Tracked by this repo
 README.md, CLAUDE.md, AGENTS.md   # workspace entry-point docs
-agent/                            # the engine
+spec/                             # the blueprint
   ARCHITECTURE.md                 # system design
   BUILD.md                        # build instructions for coding agents
-  src/                            # all .ts code — top-level engine modules + capability dirs
-    channels/, tools/             # capability code + colocated .md recipes
+  channels/                       # channel recipes (markdown)
   skills/                         # bundled skills (markdown, agentskills.io format)
   cron/                           # default scheduled jobs (markdown)
 
 # Gitignored (or own repo)
+agent/                            # generated implementation — TypeScript code
 config/                           # behavior — SOUL.md, instance overrides, .env
 memory/                           # durable state — facts, preferences, journal
-runtime/                          # ephemeral state — db, logs, pid files
+runtime/                          # ephemeral state — threads, logs, pid files
 ```
 
-See [agent/ARCHITECTURE.md](agent/ARCHITECTURE.md) for the full system design.
+The repo is the **spec** — the design. The bootstrap reads `spec/` and generates `agent/`. Each user has their own `agent/`, `config/`, and `memory/`, optionally as their own Git repos.
+
+See [spec/ARCHITECTURE.md](spec/ARCHITECTURE.md) for the full system design.
 
 ## Principles
 
