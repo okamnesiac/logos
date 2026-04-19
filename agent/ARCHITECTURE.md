@@ -151,9 +151,59 @@ All plain files spread across the four domains:
 - **`config/SOUL.md`** — identity. The agent writes this on first run after asking the user for a name and personality. Read on every invocation.
 - **`config/cron/`** — instance-specific scheduled jobs.
 - **`config/tools/`, `config/skills/`, `config/channels/`** — instance-specific capability extensions.
-- **`memory/`** — granular files of long-term knowledge. The agent reads relevant files into context per invocation.
+- **`memory/`** — granular markdown files of long-term knowledge. See **Memory format** below for conventions.
 - **`memory/journal/`** — daily scratch pad files (e.g., `memory/journal/2026-03-09.md`). The agent jots notes throughout the day; the consolidate-memories job promotes important items into the rest of `memory/`.
-- **`runtime/`** — `threads/`, `logs/`, `*.pid`.
+- **`memory/new/`** — landing folder for files lazily created by `[[wiki-link]]` references. The consolidate-memories job sorts these into appropriate folders.
+- **`runtime/`** — `threads/`, `logs/`, `*.pid`, `memory-graph.json` (backlink cache).
+
+## Memory format
+
+Memory files are standard markdown with optional YAML frontmatter. The format is **Obsidian-compatible** — you can open `memory/` as an Obsidian vault and get a free GUI for browsing and editing.
+
+### File anatomy
+
+```markdown
+---
+created: 2026-04-18T10:30:00Z
+updated: 2026-04-18T11:00:00Z
+tags: [coffee, preferences]
+aliases: [coffee-order, my-coffee]
+---
+
+I like my coffee black, no sugar. Usually from [[people/justin]]'s
+favorite place, [[blue-bottle]].
+
+See also: ![[preferences/morning-routine]]
+```
+
+- **Frontmatter** holds intrinsic metadata about the note. Standard keys (`tags`, `aliases`, `created`, `updated`) match Obsidian conventions. Engine-specific fields are namespaced — e.g., `logos.confidence`, `logos.source` — to avoid collision with Obsidian or its plugins.
+- **Body** is markdown. Tasks (`- [ ]`) work with Obsidian's Tasks plugin.
+
+### Linking
+
+Forward links use the wiki-link syntax:
+
+- `[[note-name]]` — link by name (no `.md` extension)
+- `[[note-name|display text]]` — link with custom display text
+- `![[note-name]]` — embed (inlines the linked file's content)
+- `[[path/to/note]]` — disambiguate when multiple files share a name
+
+**Resolution rules** (matching Obsidian):
+
+1. Find all files in `memory/` whose filename (without `.md`) equals the link target, or whose `aliases:` list contains it
+2. If exactly one match: that's the link target
+3. If multiple matches: pick the **shortest path**, then alphabetical
+4. If no match: **lazy-create** at `memory/new/{name}.md` with empty frontmatter and body
+
+### Backlinks
+
+Backlinks are not stored. They're computed by scanning all `memory/**/*.md` for `[[...]]` references and building a reverse index. The graph is cached at `runtime/memory-graph.json` and rebuilt when memory files change (mtime check at startup).
+
+The `recall` tool returns both a file's content and its backlinks ("files that reference this one"), letting the agent traverse the graph naturally.
+
+### Obsidian compatibility
+
+If `memory/` is opened as an Obsidian vault, Obsidian creates a `.obsidian/` directory for vault settings (workspace layout, plugin config). This directory is machine-local and should be in `memory/.gitignore`. Configure Obsidian's "Default location for new notes" → `new/` to match the lazy-create destination.
 
 ## First-run flow
 
@@ -237,11 +287,14 @@ config/
 
 # Durable state — gitignored, optionally a separate repo
 memory/
+  .obsidian/          # vault settings (machine-local, gitignored)
   facts/
+  people/
   preferences/
   summaries/
   journal/
     2026-03-10.md
+  new/                # lazy-created files (sorted by consolidate-memories)
 
 # Ephemeral — gitignored, never a repo
 runtime/

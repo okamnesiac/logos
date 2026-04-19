@@ -104,10 +104,28 @@ Start with a minimal set of tools, all in `agent/src/tools/`:
 
 - **read_file** — read a file from the workspace. Takes a relative path, returns the file contents. Reject paths that escape the workspace root (e.g. `../` or absolute paths).
 - **remember** — append a note to today's file in `memory/journal/` (e.g. `memory/journal/2026-03-09.md`)
-- **recall** — read relevant files from `memory/` (start with all files; refine later if it's too much context)
+- **recall** — given a note name (or list of names), look up the corresponding files in `memory/` using the link resolver (see step 4b), and return their contents along with their backlinks ("files that reference this note")
 - **shell** — run a shell command asynchronously using bash on the host (workspace root as cwd, 1 MB output limit). Don't block the event loop. The tool description should tell the agent to let the user know before running long commands, since the conversation pauses during execution.
 
 The tool loader should also scan `config/tools/` for `*.ts` files and register any custom tools defined there.
+
+#### 4b. Memory graph
+
+Memory uses Obsidian-compatible markdown with `[[wiki-link]]` syntax (see `ARCHITECTURE.md` → Memory format for the conventions).
+
+Build a small memory module (e.g. `agent/src/memory.ts`) with:
+
+- **Link resolver** — given a link target (a name, optionally with path hints), find the matching file under `memory/` using these rules in order:
+  1. Filename match (without `.md`) or alias match (from frontmatter `aliases:`)
+  2. If multiple, pick shortest path, then alphabetical
+  3. If none, lazy-create at `memory/new/{target}.md` with empty frontmatter and body, and return that path
+- **Graph builder** — at startup, scan `memory/**/*.md`, parse frontmatter and `[[...]]` links from each file, build:
+  - A name index (filename + aliases → file path)
+  - A backlink index (file path → list of files that link to it)
+- **Cache** — write the graph to `runtime/memory-graph.json` after building. On startup, check the cache: if all source file mtimes are <= the cache's mtime, use it; otherwise rebuild.
+- **Frontmatter parser** — use `js-yaml` to parse the YAML block between `---` delimiters at the top of each file. Tolerate missing or malformed frontmatter (treat as empty).
+
+The `recall` tool wraps the resolver: given a name, find the file, return its content + its backlinks.
 
 Skills are markdown instruction files following the [Agent Skills](https://agentskills.io) standard. At startup, scan both `agent/skills/` and `config/skills/` for directories containing `SKILL.md`. Extract the YAML frontmatter block (between `---` delimiters), parse it with `js-yaml` (not regex) to get each skill's `name` and `description`, and include them in the system prompt. On name collision, `config/` wins. When the agent decides to use a skill, it reads the full `SKILL.md` for instructions.
 

@@ -4,7 +4,10 @@ schedule: "0 23 * * *"
 
 # Consolidate Memories
 
-Review today's scratch pad in `memory/journal/` and consolidate anything important into `memory/`.
+Two sources to sweep:
+
+1. Today's scratch pad in `memory/journal/` — promote anything important into structured memory files.
+2. Files in `memory/new/` — these were lazily created by `[[wiki-link]]` references and need to be sorted into appropriate folders (or merged into existing files).
 
 ## What to promote
 
@@ -22,5 +25,7 @@ Review today's scratch pad in `memory/journal/` and consolidate anything importa
 ## How to update memory
 
 - Add granular entries to relevant files under `memory/` (create files and subdirectories as needed)
+- Use `[[wiki-link]]` syntax to reference other notes by name
+- For files in `memory/new/`: either move them to a sensible folder (e.g., `mv memory/new/coffee.md memory/preferences/`) or merge their content into an existing file and delete the original
 - Remove entries that are outdated or contradicted by new information
-- Keep entries concise — `memory/` is read on every invocation, so brevity matters
+- Keep entries concise — relevant memory files are loaded on each invocation, so brevity matters
