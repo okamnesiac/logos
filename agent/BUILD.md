@@ -2,7 +2,7 @@
 
 Step-by-step instructions for building Logos from the architecture spec. Read `ARCHITECTURE.md` first.
 
-All paths in this document are **relative to the workspace root** (the directory that contains `agent/`, not `agent/` itself). Run all commands from there. The agent code lives in `agent/src/`; runtime artifacts in `runtime/`; instance configuration in `config/`.
+All paths in this document are **relative to the workspace root** (the directory that contains `agent/`, not `agent/` itself). Run all commands from there. Engine code lives in `agent/src/`; runtime artifacts in `runtime/`; instance configuration in `config/`.
 
 ## Before you start
 
@@ -22,7 +22,7 @@ Don't worry about the assistant's name or personality — those are configured o
 - `tsx` — TypeScript execution without a build step. The agent can modify its own source and restart to apply changes.
 - `zod` — schema validation, required by the AI SDK for tool parameter definitions
 - `dotenv` — load environment variables from `config/.env`
-- Channel-specific libraries — see the chosen recipe in `agent/channels/`
+- Channel-specific libraries — see the chosen recipe in `agent/src/channels/`
 
 ## Environment variables
 
@@ -34,7 +34,7 @@ At minimum:
 - `AI_MODEL` — model to use. Default to a sensible current model; don't pin exact version strings since model names change frequently.
 - `PRIMARY_CHANNEL` — the channel used for the owner's main conversation (e.g. `telegram`). The scheduler sends replies here.
 
-Channel-specific variables (including the owner's ID on that platform) are listed in each channel recipe under `agent/channels/`.
+Channel-specific variables (including the owner's ID on that platform) are listed in each channel recipe under `agent/src/channels/`.
 
 ## Step-by-step
 
@@ -46,7 +46,7 @@ Channel-specific variables (including the owner's ID on that platform) are liste
 - Target ES2022 with Node module resolution
 - Keep configuration minimal
 - Install packages with `npm install <package-name>` from inside `agent/` rather than writing `package.json` by hand — this ensures you get the latest versions and only lists direct dependencies. **Never manually edit the `dependencies` or `devDependencies` objects in `package.json`.**
-- Source code lives in `agent/src/`.
+- Source code lives in `agent/src/`. Top-level engine modules (`index.ts`, `router.ts`, `agent.ts`, `scheduler.ts`, `threads.ts`, `memory.ts`) sit at `agent/src/` root. Capability code lives in `agent/src/channels/` and `agent/src/tools/`, colocated with its `.md` recipe. `agent/skills/` and `agent/cron/` stay outside `src/` — they're markdown-only and have no `.ts` companions.
 - Use `process.cwd()` for the workspace root path, not `import.meta.dirname` — tsx runs in CJS mode where `import.meta.dirname` is undefined. The wrapper script ensures the process runs with the workspace root as cwd.
 - Create `config/` if it doesn't exist (the agent should do this on first run, but the build can pre-create it). Create a `config/.env` template with the API key for the chosen provider, `AI_MODEL`, `PRIMARY_CHANNEL`, and any channel-specific variables. Leave secrets blank for the user to fill in.
 
@@ -100,7 +100,7 @@ If `config/SOUL.md` doesn't exist when the agent assembles its system prompt:
 - After the user answers, the agent writes `config/SOUL.md`. Subsequent invocations read it normally.
 - Also ensure `config/`, `memory/`, and `runtime/` directories exist; create them if not.
 
-Start with a minimal set of tools, all in `agent/tools/`:
+Start with a minimal set of tools, all in `agent/src/tools/`:
 
 - **read_file** — read a file from the workspace. Takes a relative path, returns the file contents. Reject paths that escape the workspace root (e.g. `../` or absolute paths).
 - **remember** — append a note to today's file in `memory/journal/` (e.g. `memory/journal/2026-03-09.md`)
@@ -131,14 +131,14 @@ Skills are markdown instruction files following the [Agent Skills](https://agent
 
 ### 5. Build the channel registry
 
-- Scan `agent/channels/` and `config/channels/` for `*.ts` files at startup. For each, dynamically import and call its `register()` function with the router. No manual registration list — channels are discovered.
+- Scan `agent/src/channels/` and `config/channels/` for `*.ts` files at startup. For each, dynamically import and call its `register()` function with the router. No manual registration list — channels are discovered.
 - A channel's `register()` returns the channel's ID, owner conversation ID, and send function if it connected successfully — or nothing if credentials were missing and it skipped. When skipping, log which environment variables are missing and how to get them (see the colocated `.md` recipe).
 - The registry collects connected channels into a map by channel ID so the scheduler can look up any channel's send function and owner conversation ID
 - If no channels connected, the process should exit with a clear error — there's nothing to connect to.
 
 ### 6. Build the user's chosen channel
 
-Read the recipe at `agent/channels/{name}.md` for the channel the user chose and follow its setup instructions. The implementation goes at `agent/channels/{name}.ts` per the colocation convention (see `ARCHITECTURE.md` → Capability layout). The channel must only forward messages from the owner (identified by the owner ID in the recipe's environment variables) and silently ignore everyone else. Get the full loop working end-to-end before adding anything else.
+Read the recipe at `agent/src/channels/{name}.md` for the channel the user chose and follow its setup instructions. The implementation goes at `agent/src/channels/{name}.ts` per the colocation convention (see `ARCHITECTURE.md` → Capability layout). The channel must only forward messages from the owner (identified by the owner ID in the recipe's environment variables) and silently ignore everyone else. Get the full loop working end-to-end before adding anything else.
 
 ### 7. Build the scheduler
 

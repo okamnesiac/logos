@@ -20,8 +20,7 @@ The restart will type-check your code before applying it. If the check fails, th
 Before making changes, read the relevant documentation:
 
 - `agent/ARCHITECTURE.md` — system design, component responsibilities, how pieces fit together
-- `agent/channels/*.md` — implementation recipes for each messaging channel (colocated with the channel source)
-- `agent/voice/*.md` — voice input/output recipes
+- `agent/src/channels/*.md` — implementation recipes for each messaging channel (colocated with the channel source)
 
 ## Rules
 

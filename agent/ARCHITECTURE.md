@@ -69,7 +69,7 @@ Channels are messaging platform integrations. Each channel:
 
 **Main chat:** The `PRIMARY_CHANNEL` environment variable names the channel used for the owner's main conversation (e.g., `telegram`). The scheduler sends replies to the owner's conversation on this channel.
 
-**Bundled vs. instance-specific:** Channel implementations ship in `agent/channels/` (one `.ts` file per channel, plus a colocated `.md` recipe). Users can add their own channels in `config/channels/`; the loader scans both directories at startup.
+**Bundled vs. instance-specific:** Channel implementations ship in `agent/src/channels/` (one `.ts` file per channel, plus a colocated `.md` recipe). Users can add their own channels in `config/channels/`; the loader scans both directories at startup.
 
 ### 2. Router
 
@@ -86,7 +86,7 @@ If the agent's response is the exact string `NO_REPLY`, the router discards it. 
 
 The agent is the brain. It uses the Vercel AI SDK to receive a message + history, decide how to respond, optionally use tools, and return a response.
 
-**Tools** are typed capabilities defined in code. The kernel ships four primitives in `agent/tools/`: `read_file`, `remember`, `recall`, `shell`. Users can add their own in `config/tools/`; both directories are loaded at startup. The AI SDK handles tool execution loops natively — limit the number of steps to prevent runaway tool use.
+**Tools** are typed capabilities defined in code. The kernel ships four primitives in `agent/src/tools/`: `read_file`, `remember`, `recall`, `shell`. Users can add their own in `config/tools/`; both directories are loaded at startup. The AI SDK handles tool execution loops natively — limit the number of steps to prevent runaway tool use.
 
 **Skills** are markdown instruction files that teach the agent how to accomplish complex tasks using its tools. Bundled skills live in `agent/skills/`, instance-specific skills in `config/skills/`. Both directories are scanned at startup; on name collision, `config/` wins.
 
@@ -219,8 +219,8 @@ The agent also creates `config/`, `memory/`, and `runtime/` directories on first
 
 1. Ensure `runtime/` directory exists (`runtime/threads/` is created lazily on first message)
 2. Discover skills (scan `agent/skills/` and `config/skills/` for `SKILL.md` files; load names and descriptions; config overrides agent on name collision)
-3. Discover tools (scan `agent/tools/` and `config/tools/`; same merge rules)
-4. Register channels (scan `agent/channels/` and `config/channels/`; each checks for credentials and connects if present). If no channels connect, exit with an error.
+3. Discover tools (scan `agent/src/tools/` and `config/tools/`; same merge rules)
+4. Register channels (scan `agent/src/channels/` and `config/channels/`; each checks for credentials and connects if present). If no channels connect, exit with an error.
 5. Start the scheduler (scan `agent/cron/` and `config/cron/`; merge by filename per the layering rules above)
 6. If `config/SOUL.md` doesn't exist, run first-run flow
 7. Begin processing incoming messages
@@ -243,37 +243,32 @@ agent/
   package.json
   tsconfig.json
   logos               # wrapper script (start/stop/restart/status)
-  src/                # top-level engine code (no recipes here)
+  src/                # all .ts code — recipes colocate inside, next to their .ts
     index.ts          # entry point
     router.ts
     agent.ts
     scheduler.ts
     threads.ts
     memory.ts
-  channels/           # implementation + recipe colocated
-    telegram.ts
-    telegram.md
-    whatsapp.ts
-    whatsapp.md
-    ...
-  tools/              # implementation + (optional) recipe colocated
-    read_file.ts
-    remember.ts
-    recall.ts
-    shell.ts
-  voice/              # voice capabilities — implementation + recipe colocated
-    voice-input.ts
-    voice-input.md
-    voice-output.ts
-    voice-output.md
-  skills/             # bundled skills (agentskills.io directory format)
+    channels/         # implementation + recipe colocated
+      telegram.ts
+      telegram.md
+      whatsapp.ts
+      whatsapp.md
+      ...
+    tools/            # implementation + (optional) recipe colocated
+      read_file.ts
+      remember.ts
+      recall.ts
+      shell.ts
+  skills/             # bundled skills (agentskills.io directory format) — markdown only
     self-edit/
       SKILL.md
     git/
       SKILL.md
     coding/
       SKILL.md
-  cron/               # default cron jobs
+  cron/               # default cron jobs — markdown only
     heartbeat.md
     consolidate-memories.md
 
@@ -308,19 +303,19 @@ runtime/
 
 ## Capability layout
 
-Channels, tools, and voice capabilities all follow the same convention: each capability is a `.ts` implementation file plus an optional colocated `.md` recipe sharing the same basename.
+Channels and tools follow the same convention: each capability is a `.ts` implementation file plus an optional colocated `.md` recipe sharing the same basename.
 
 ```
-agent/channels/telegram.ts    # implementation
-agent/channels/telegram.md    # recipe (library, env vars, setup, gotchas)
+agent/src/channels/telegram.ts    # implementation
+agent/src/channels/telegram.md    # recipe (library, env vars, setup, gotchas)
 ```
 
 Rules:
 
 - **Filename = capability name.** No central registry. The loader scans the directory for `*.ts` files and registers each one.
 - **Colocation.** The `.md` recipe lives next to the `.ts` it documents. Recipes never name the implementation path explicitly — the path is determined by the recipe's own location.
-- **Recipe is optional.** Built-in tools like `read_file` don't need a recipe; user-facing capabilities like channels and voice do, since they involve external setup.
-- **Two-root scan.** The loader scans both `agent/{capability}/` (bundled) and `config/{capability}/` (instance-specific). On name collision, `config/` wins — the user's version replaces the bundled one.
+- **Recipe is optional.** Built-in tools like `read_file` don't need a recipe; user-facing capabilities like channels do, since they involve external setup.
+- **Two-root scan.** The loader scans both `agent/src/{capability}/` (bundled) and `config/{capability}/` (instance-specific). On name collision, `config/` wins — the user's version replaces the bundled one. Note the asymmetry: `agent/` has a `src/` (engineering scaffolding for build tooling and node_modules); `config/` does not (it's mixed-content user behavior with no build step).
 
 Skills are different — they follow the [Agent Skills](https://agentskills.io) directory format (`{name}/SKILL.md`), not a flat file. Cron jobs are also different — pure markdown files with frontmatter, no `.ts` companion.
 

@@ -30,7 +30,7 @@ Read `config/SOUL.md` first, every time you wake. That file defines who you are 
 
 ## Tools
 
-Core tools are defined in code under `agent/tools/`:
+Core tools are defined in code under `agent/src/tools/`:
 
 - **read_file** — read any file in the workspace
 - **remember** — store a fact for later recall (appends to today's journal in `memory/journal/`)

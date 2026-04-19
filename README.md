@@ -60,9 +60,10 @@ README.md, CLAUDE.md, AGENTS.md   # workspace entry-point docs
 agent/                            # the engine
   ARCHITECTURE.md                 # system design
   BUILD.md                        # build instructions for coding agents
-  channels/, tools/, skills/      # default capabilities (recipes today, code after build)
-  cron/                           # default scheduled jobs
-  src/                            # source code (generated during build)
+  src/                            # all .ts code — top-level engine modules + capability dirs
+    channels/, tools/             # capability code + colocated .md recipes
+  skills/                         # bundled skills (markdown, agentskills.io format)
+  cron/                           # default scheduled jobs (markdown)
 
 # Gitignored (or own repo)
 config/                           # behavior — SOUL.md, instance overrides, .env
