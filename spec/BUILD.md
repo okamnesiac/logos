@@ -98,9 +98,9 @@ The router:
 - Accepts incoming messages from channels (channelId, conversationId, text, timestamp)
 - Queues messages per-conversation so only one agent invocation runs per conversation at a time
 - Stores the inbound message, then retrieves conversation history (which now includes it). Passes only the history to the agent — no separate "current message" parameter. The last message in the history is the one the agent is replying to.
-- **Stores the assistant's response in the JSONL and calls the channel's `send` function — even when the response is `NO_REPLY`.** When the agent returns `NO_REPLY`, the router treats it as an empty assistant message: the JSONL gets `{"role":"assistant","text":"","timestamp":"..."}` and `send("")` is called on the channel. Channels handle empty content as a "lifecycle marker, no visible content" — Telegram skips the Bot API call but stops its typing-refresh loop; terminal broadcasts the empty message via `fs.watch` and clients render nothing for it but use it to clear the thinking indicator.
+- **Stores the assistant's response in the JSONL and calls the channel's `send` function — even when the response is `NO_REPLY`.** Store the response as-is. When the agent returns `NO_REPLY` (exact match after `.trim()`), the JSONL gets `{"role":"assistant","text":"NO_REPLY","timestamp":"..."}` and `send("NO_REPLY")` is called on the channel. Channels handle the literal `NO_REPLY` marker per the channel `send()` contract (ARCHITECTURE.md → Channel `send()` contract): no display, but clean up turn-scoped UI.
 
-  This unified pipeline (always append, always call send) is how typing/thinking indicators get cleared when the agent decides to stay silent. There is no separate "turn ended" callback — the empty send IS the signal. Token cost is negligible (~5 tokens per silent turn in subsequent invocations' history).
+  This unified pipeline (always append, always call send) is how typing/thinking indicators get cleared when the agent decides to stay silent. There is no separate "turn ended" callback — the `NO_REPLY` send IS the signal. The same string flows through the agent's output, the JSONL, and the API view — no translation layer, nothing for the model to misinterpret.
 
 ### 4. Build the agent
 
@@ -223,7 +223,7 @@ The sub-agent does **NOT** receive: SOUL.md, the memory manifest, recent journal
 - The registry collects connected channels into a map by channel ID so the scheduler can look up any channel's send function and owner conversation ID.
 - If no channels connected, the process should exit with a clear error — there's nothing to connect to.
 
-**Every channel MUST honor the `send()` contract** (ARCHITECTURE.md → Channel `send()` contract): `send(text)` is called exactly once per agent invocation; on `text === ""` (the `NO_REPLY` lifecycle marker), the channel must NOT display anything but MUST clean up any turn-scoped state (typing indicators, refresh loops, etc.). This is general — applies to every channel, present and future.
+**Every channel MUST honor the `send()` contract** (ARCHITECTURE.md → Channel `send()` contract): `send(text)` is called exactly once per agent invocation; on `text.trim() === "NO_REPLY"` (the lifecycle marker), the channel must NOT display anything but MUST clean up any turn-scoped state (typing indicators, refresh loops, etc.). This is general — applies to every channel, present and future.
 
 ### 6. Build the user's chosen channel
 

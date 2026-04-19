@@ -84,10 +84,14 @@ Channels are messaging platform integrations. Each channel:
 
 Every channel exports a `send(text)` function via its `register()` return. The router calls `send` exactly once per agent invocation, with one of:
 
-- **Non-empty `text`** — a normal reply. Display it on the platform however the platform expects.
-- **Empty string (`""`)** — a **lifecycle marker**, NOT a message. The agent decided to stay silent (`NO_REPLY` semantic — see Router below). The channel must NOT show anything to the user, but it MUST clean up any turn-scoped state — typing indicators, refresh loops, "thinking" animations. Without this, channels that show "the bot is thinking" while the agent works hang on those indicators when the agent stays silent.
+- **Normal text** — a reply to display. Send it on the platform however the platform expects.
+- **The literal string `"NO_REPLY"`** — a **lifecycle marker**, NOT a message. The agent decided to stay silent. The channel must NOT show anything to the user, but it MUST clean up any turn-scoped state — typing indicators, refresh loops, "thinking" animations. Without this, channels that show "the bot is thinking" while the agent works hang on those indicators when the agent stays silent.
 
-This contract is general — any new channel MUST handle empty `text` correctly. Don't repeat this rule in per-channel recipes; recipes mention only platform-specific cleanup details (e.g., "clear the typing-refresh interval" for Telegram).
+The router stores `NO_REPLY` literally in the JSONL and passes it through to `send()` unchanged — no translation layer. The same string is used by the agent (its output convention), in storage (the JSONL record), and in the API view sent back to the model on subsequent invocations. This means past silent turns reinforce the convention by example, rather than introducing a separate placeholder the model could imitate.
+
+The literal `NO_REPLY` token is matched exactly (`text.trim() === "NO_REPLY"`) — substring matches don't count. If the model wants to discuss the convention (e.g., "I respond with NO_REPLY when…"), the surrounding content makes it a normal reply.
+
+This contract is general — any new channel MUST handle the `NO_REPLY` marker correctly. Don't repeat this rule in per-channel recipes; recipes mention only platform-specific cleanup details (e.g., "clear the typing-refresh interval" for Telegram).
 
 #### Cursor-based replay
 
@@ -110,9 +114,9 @@ The router sits between channels and the agent. It:
 - Passes messages to the agent with conversation context
 - Routes agent responses back to the originating channel
 
-If the agent's response is the exact string `NO_REPLY`, the router treats it as an **empty assistant message**: appends `{role: "assistant", text: ""}` to the JSONL and calls `channel.send("")`. Channels interpret empty content as "lifecycle marker, no visible content" — they don't display anything to the user, but they do use the call to clean up turn-scoped UI (typing indicators, thinking dots, etc.). Without this, channels that show "thinking" or "typing" while the agent works have no signal that the turn ended on a silent decision and the indicator hangs.
+If the agent's response is `NO_REPLY` (exact match after trim), the router stores it **as-is** — the JSONL gets `{role: "assistant", text: "NO_REPLY"}` and `channel.send("NO_REPLY")` is called. Channels recognize the marker per the [Channel `send()` contract](#channel-send-contract): no display, but clean up turn-scoped UI (typing indicators, thinking dots).
 
-This applies to all invocations — direct user messages and cron-originated heartbeats both. The agent retains latitude to stay silent; the channels still get clean turn lifecycles.
+This applies to all invocations — direct user messages and cron-originated heartbeats both. The agent retains latitude to stay silent; the channels still get clean turn lifecycles. Storage, API view, and the agent's output convention all use the same string — no translation layer.
 
 ### 3. Agent
 
