@@ -143,6 +143,8 @@ Do not return `null`, `undefined`, or `{ path: null }`. The shape above is the c
 
 **Long-term memory** comes from the `memory/` directory. The system prompt includes a manifest (name + summary) for every memory file; full content is fetched on demand via `find_memory` and `read_file`. See **Memory format** below.
 
+**Self-awareness.** The system prompt includes a fixed "How you operate" block that explains the agent's two invocation modes (user messages vs. scheduled cron jobs) and a list of active cron jobs (name + schedule + summary). Without this, the agent doesn't know cron exists and may tell the user it can't reach out proactively — which is wrong; cron heartbeats are exactly the proactive-outreach mechanism. See `BUILD.md` step 4 for the exact wording.
+
 **Model-agnostic:** The default provider is Anthropic (Claude), but switching to OpenAI, Google, or any other provider is a one-line change.
 
 #### Sub-agents

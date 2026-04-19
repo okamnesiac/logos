@@ -113,6 +113,19 @@ Use the Vercel AI SDK's `generateText` for automatic tool execution. Limit the n
   3. The last 24 hours of `memory/journal/` entries inline (these are recent agent-authored notes likely to be relevant; older journal entries appear in the manifest only)
   4. A summary of available skills (names and descriptions from `spec/skills/*/SKILL.md` and `config/skills/*/SKILL.md` frontmatter; config wins on name collision)
   5. Today's date — so `remember` and other date-aware behavior work without a tool call
+  6. **A "How you operate" block** — a fixed paragraph explaining the agent's invocation model so it understands its own architecture. Include verbatim:
+
+     ```
+     You run continuously and can be invoked in two ways:
+
+     - **User messages** from connected channels (e.g. Telegram, terminal chat). When the user sends a message, you receive it as the latest entry in the conversation history and respond.
+
+     - **Scheduled cron jobs.** The scheduler periodically injects a synthetic prompt from a job definition (see "Scheduled tasks" below). Cron is your mechanism for proactive outreach — when a heartbeat fires, that's your chance to reach out to the user. To send a proactive message, just respond normally; your reply is delivered to the user's primary messaging channel. Reply with exactly `NO_REPLY` if there's nothing worth saying.
+     ```
+
+     This block is static — the same text every invocation. Without it the agent doesn't know that cron exists, doesn't realize heartbeats are the proactive-outreach mechanism, and may incorrectly tell users it can't reach out unprompted.
+
+  7. **Active cron jobs** — a flat list of `name • schedule • summary` for each enabled merged job (the same merged set the scheduler loaded from `spec/cron/` + `config/cron/`). Summary is the frontmatter `description:` field if present, else the first H1 heading in the body, else the first ~100 chars of body. Skip disabled jobs. This makes the agent aware of what's scheduled to fire and what each job is for, so it can recognize cron-originated prompts when they arrive.
 - The agent receives conversation history (the current message is already the last entry). Pass it directly to the SDK as the messages array.
 - Cap conversation history at 50 messages (most recent) to avoid blowing past token limits. Apply the cap when retrieving history, not in the agent.
 - Guard against oversized prompts. Estimate tokens using a 4:1 character-to-token ratio. First, truncate any individual message over 10,000 tokens. Then, if the total (system prompt + messages) exceeds 150,000 tokens, drop the oldest messages until it fits.
