@@ -283,6 +283,24 @@ Run the process with `npx tsx agent/src/index.ts` (not compiled JS). This way th
 
 Use a PID file at `runtime/logos.pid` and write logs to `runtime/logs/`. Both are gitignored. Append to the log file — don't truncate it on restart.
 
+**`stop` must kill the entire process tree, not just the PID file's PID.** Running the daemon as `npx tsx agent/src/index.ts` produces a multi-process tree (npm wrapper + tsx node child). If `stop` only kills the npm wrapper, the node child gets re-parented to init and survives — invisible to the wrapper, still polling channels, still firing scheduled jobs. Each `restart` then leaks a zombie daemon.
+
+Walk the tree with `pgrep -P` and kill recursively:
+
+```bash
+kill_tree() {
+  local pid=$1
+  local children
+  children=$(pgrep -P "$pid" 2>/dev/null || true)
+  for child in $children; do
+    kill_tree "$child"
+  done
+  kill -TERM "$pid" 2>/dev/null || true
+}
+```
+
+`pgrep` ships on both macOS and Linux. After SIGTERM, give the process a few seconds to shut down gracefully, then SIGKILL the root PID if it's still alive.
+
 **Safe-restart protocol for `restart`:**
 
 1. **Snapshot the current `agent/` HEAD.** If `agent/` is a Git repo (`agent/.git` exists), record the current commit SHA with `git -C agent rev-parse HEAD`. If it's not a Git repo, skip the rollback steps below and warn the user that self-edit rollback won't work.
