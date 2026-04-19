@@ -17,8 +17,7 @@
 
 1. Install `signal-cli` on the host
 2. Register or link a phone number
-3. Implement the channel in `src/channels/signal.ts`
-4. Use `signal-cli` in daemon mode with JSON-RPC or poll for incoming messages
+3. Use `signal-cli` in daemon mode with JSON-RPC or poll for incoming messages
 
 ## Notes
 

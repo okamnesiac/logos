@@ -17,8 +17,7 @@ No npm library needed. Uses the [BlueBubbles](https://bluebubbles.app) server's 
 ## Setup
 
 1. Install and configure BlueBubbles server on a Mac
-2. Implement the channel in `src/channels/imessage.ts`
-3. Use the REST API to send messages and webhooks to receive them
+2. Use the REST API to send messages and webhooks to receive them
 
 ## Notes
 

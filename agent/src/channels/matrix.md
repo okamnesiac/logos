@@ -15,7 +15,6 @@
 1. Create a Matrix account for the bot on your homeserver
 2. Generate an access token
 3. Install `matrix-js-sdk`
-4. Implement the channel in `src/channels/matrix.ts`
 
 ## Notes
 

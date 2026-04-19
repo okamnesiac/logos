@@ -30,9 +30,9 @@ More specifically:
 1. **Create your own copy** — GitHub doesn't allow private forks of public repos, so [import this repository](https://github.com/new/import) as a new private repo instead
 2. **Point your AI coding agent at it** (Claude Code, Codex, etc.)
 3. **Tell the agent:** `bootstrap telegram` (or whichever channel you want)
-  - The agent will create files and run commands. Approve its edits — it's building the whole codebase for you.
-4. **Fill in your API keys** in `.env`
-5. **Start it** — `./logos start`
+   - The agent will create files and run commands. Approve its edits — it's building the whole codebase for you.
+4. **Fill in your API keys** in `config/.env`
+5. **Start it** — `agent/logos start`
 6. **Send it a message** — on first run, it'll ask for a name and personality
 
 The repository contains no running code. It contains the spec. The coding agent reads the spec and generates the implementation.
@@ -44,42 +44,42 @@ A personal AI assistant that:
 - Runs as a single Node.js process on your machine
 - Connects to your messaging apps (Telegram, WhatsApp, Discord, Slack, etc.)
 - Uses any LLM you choose (model-agnostic via the Vercel AI SDK)
-- Has a personality you define in `SOUL.md`
+- Has a personality you define in `config/SOUL.md`
 - Remembers things in markdown files you can read and edit
 - Runs scheduled tasks on your behalf
 - Can modify its own source code and restart to apply changes
 - Is small enough to understand completely
 
-## What's in the repo
+## Workspace layout
+
+The workspace is split into four sibling domains. Only `agent/` is tracked by this repo; the others are gitignored and may optionally be backed by their own repos.
 
 ```
-# The spec
-ARCHITECTURE.md     # System design — components, contracts, data flow
-BUILD.md            # Step-by-step build instructions for the coding agent of your choice
-AGENTS.md           # Runtime behavior contract for the assistant
-SOUL.md             # Identity template — name, personality, voice
+# Tracked by this repo
+README.md, CLAUDE.md, AGENTS.md   # workspace entry-point docs
+agent/                            # the engine
+  ARCHITECTURE.md                 # system design
+  BUILD.md                        # build instructions for coding agents
+  src/                            # all .ts code — top-level engine modules + capability dirs
+    channels/, tools/             # capability code + colocated .md recipes
+  skills/                         # bundled skills (markdown, agentskills.io format)
+  cron/                           # default scheduled jobs (markdown)
 
-# Data (used at runtime)
-memory.md           # Long-term memory (read every invocation)
-memories/           # Daily scratch pad files
-cron/               # Scheduled tasks (config + prompts)
-skills/             # Reusable capabilities (agentskills.io format)
-recipes/            # Implementation guides for channels and features
-
-# Generated during bootstrap
-src/                # All source code
+# Gitignored (or own repo)
+config/                           # behavior — SOUL.md, instance overrides, .env
+memory/                           # durable state — facts, preferences, journal
+runtime/                          # ephemeral state — db, logs, pid files
 ```
+
+See [agent/ARCHITECTURE.md](agent/ARCHITECTURE.md) for the full system design.
 
 ## Principles
 
 - **Your machine, your data.** Everything runs locally. Nothing phones home.
-- **Files over databases.** Memory, skills, and config are readable markdown and YAML. SQLite is only for message history.
+- **Files over databases.** Everything is plain files: identity, memory, skills, cron, and message history. No database, no driver, no schema. `cat` is your inspector.
 - **Specify the what, not the how.** The spec defines components and responsibilities. Implementation details are left to the coding agent.
 - **No speculative features.** Only what's needed for a working assistant.
-
-## Architecture
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design.
+- **Four domains.** Engine, behavior, memory, and runtime are separate concerns with separate lifecycles.
 
 ## Inspired by
 

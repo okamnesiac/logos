@@ -1,5 +1,0 @@
-jobs:
-  - name: heartbeat
-    cron: "*/30 * * * *"
-  - name: consolidate-memories
-    cron: "0 23 * * *"

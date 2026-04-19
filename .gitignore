@@ -1,5 +1,16 @@
-data/
-.env
-node_modules/
-*.pid
-logs/
+# The agent repo only tracks the workspace shell + agent/.
+# config/, memory/, runtime/ are sibling domains owned elsewhere
+# (own repos, or unmanaged folders). Whitelist what we track.
+
+/*
+!/.gitignore
+!/.gitattributes
+!/README.md
+!/CLAUDE.md
+!/AGENTS.md
+!/agent/
+
+# Within agent/, ignore generated and machine-local artifacts.
+agent/node_modules/
+agent/.env
+agent/*.pid

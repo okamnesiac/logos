@@ -14,7 +14,6 @@
 2. Enable the Message Content intent (required to read message text)
 3. Invite the bot to your server with appropriate permissions
 4. Install `discord.js`
-5. Implement the channel in `src/channels/discord.ts`
 
 ## Notes
 

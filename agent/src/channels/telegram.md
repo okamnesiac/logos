@@ -13,7 +13,6 @@
 
 1. Create a bot via BotFather and copy the token
 2. Install `grammy`
-3. Implement the channel in `src/channels/telegram.ts`
 
 ## Owner filtering
 

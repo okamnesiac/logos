@@ -11,8 +11,7 @@
 ## Setup
 
 1. Install `@whiskeysockets/baileys` and `qrcode-terminal`
-2. Implement the channel in `src/channels/whatsapp.ts`
-3. On first run, scan the QR code with WhatsApp on your phone to link the device
+2. On first run, scan the QR code with WhatsApp on your phone to link the device
 
 ## Notes
 

@@ -17,7 +17,6 @@
 4. Subscribe to events: `message.channels`, `message.groups`, `message.im`, `app_mention`
 5. Install the app to your workspace
 6. Install `@slack/bolt`
-7. Implement the channel in `src/channels/slack.ts`
 
 ## Notes
 
