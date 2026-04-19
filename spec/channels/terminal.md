@@ -132,12 +132,18 @@ The loop should feel like a normal chat: the user types a line, sees it rendered
 
 ### Thinking indicator (client)
 
+The indicator is just a **prompt swap**. No separate line, no animation, no "logos is thinking" text.
+
+- Default prompt: `> `
+- While thinking: `… ` (single ellipsis character + space)
+
 On `{"type": "thinking"}`:
 
-- Render an indicator on a transient line below any visible content — e.g., `logos is thinking…` in dim styling. Animate the trailing dots (cycle `.`, `..`, `…`) on a ~400 ms interval so the user sees activity.
-- Use the same async-output discipline as messages: clear the prompt line before drawing the indicator, then redraw the prompt + in-progress input below it. Or render the indicator *as the prompt suffix* — implementation choice, but it must not interfere with typing.
-- **Clear the indicator** when:
-  - The next `{"type": "message"}` arrives — clear immediately, then render the message and re-prompt.
-  - A client-side timeout elapses (~60 s with no message) — clear the indicator, render `[no reply]` in dim styling, re-prompt. Avoids a stuck indicator if the agent crashed or produced `NO_REPLY`.
-- Stop the animation interval whenever the indicator is cleared (don't leak timers).
-- Only one thinking indicator at a time per client; if a second `thinking` arrives while one is active, just reset the timeout.
+- `rl.setPrompt("… ")` and redraw the prompt line (clear + redraw with `rl.line` preserved).
+
+On `{"type": "message"}` (any role) OR client-side ~60 s timeout:
+
+- `rl.setPrompt("> ")` and redraw the prompt line.
+- The 60 s timeout protects against a stuck indicator if the agent crashed or returned `NO_REPLY`. No special "[no reply]" output — just restore the prompt.
+
+Only one indicator at a time per client; if a second `thinking` arrives while the prompt is already `… `, just reset the timeout.
