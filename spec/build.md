@@ -29,7 +29,7 @@ Don't worry about the assistant's name or personality — those are configured o
 
 ## Environment variables
 
-All secrets (API keys, bot tokens) go in `config/.env`. This file is gitignored (the entire `config/` directory is gitignored by the spec repo). Load it at startup using Node's `--env-file=config/.env` flag or a small manual loader — see Dependencies above for why not `dotenv`.
+All secrets (API keys, bot tokens) go in `config/.env`. This file is gitignored (the entire `config/` directory is gitignored by the spec repo). Load it at startup so the values land in `process.env` before anything else runs.
 
 At minimum:
 
@@ -234,7 +234,7 @@ Implement `agent/src/scheduler.ts`. Cron format, merge rules, the merged-job tab
 
 The entry point (`agent/src/index.ts`):
 
-1. Loads `config/.env` (via Node's `--env-file` or a manual loader — not `dotenv`)
+1. Loads `config/.env`
 2. Ensures `runtime/` exists
 3. Registers channels
 4. Starts the scheduler
