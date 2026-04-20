@@ -82,7 +82,7 @@ Functions to export:
 
 - `appendEvent(channelId, conversationId, event)` — append one event to the conversation's JSONL (creating the directory if missing). Sanitize `channelId` and `conversationId` to safe path segments — reject anything with `/`, `..`, or other path-escape characters. Accepts any variant of the event discriminated union.
 - `readEvents(channelId, conversationId, limit?)` — read the file (return `[]` if missing), parse each non-blank line as JSON, drop malformed lines, optionally slice to the last `limit` entries.
-- `buildLlmMessages(events)` — given an ordered event list, produce the AI SDK `CoreMessage[]` to pass to `generateText`. Each event becomes one `CoreMessage` in order; an assistant event with a `tool_calls` field becomes an assistant message whose content is the text plus the tool calls (AI SDK accepts this as a single message with mixed content); `role: "tool"` events become tool messages. `role: "audit"` events (`cron_start`, `cron_end`) are skipped — they're for operator record-keeping, not for the LLM. **Adjacent same-role messages are collapsed** into a single message with concatenated content — this naturally happens at turn boundaries (a cron-driven assistant reply directly follows the prior turn's assistant reply, with no user event between) and providers other than Anthropic may not tolerate consecutive same-role messages on the wire. This is the **correctness fix** that lets the model see the tool calls it actually made.
+- `buildLlmMessages(events)` — given an ordered event list, produce the AI SDK `CoreMessage[]` per the rules in `architecture.md` → LLM context (replay): each event becomes one `CoreMessage` in order, user events get the send-time annotation, audit events are skipped, adjacent same-role messages are collapsed. This is the **correctness fix** that lets the model see the tool calls it actually made.
 - `renderForChannel(events)` — apply the render filter: for each `turn_id`, emit user events as-is and the **last** assistant text of the turn (skipping assistant events whose `text` is empty OR equals the literal `NO_REPLY` lifecycle marker); drop intermediate assistant texts, assistant events' `tool_calls`, `role: "tool"` events, and `role: "audit"` events. Used by watch-based channels (e.g. terminal). Push-based channels don't call this.
 
 The router serializes per-conversation, so `appendEvent` never has a concurrent writer on the same file. No locking needed.
@@ -120,7 +120,6 @@ The system prompt is concatenated from these sections, in order:
 2. **Memory manifest** — see `architecture.md` → Memory format → Loading into context. Build it from the memory module's manifest output (step 4b).
 3. **Last 24 hours of `memory/journal/` entries inline** — recent agent-authored notes likely to be relevant; older journal entries appear in the manifest only.
 4. **Skills summary** — names and descriptions from `spec/skills/*/SKILL.md` and `config/skills/*/SKILL.md` frontmatter; config wins on name collision. Skills loader described in step 4b.
-5. **Today's date** — so `remember` and other date-aware behavior work without a tool call.
 
 #### 4a. First-run flow
 

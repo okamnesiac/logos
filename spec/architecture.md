@@ -300,6 +300,8 @@ Every event produced by a single agent invocation shares one `turn_id`. A user m
 
 When the agent runs, the router reads the JSONL and reconstructs a `CoreMessage[]` to pass to `generateText`. **Each event becomes one CoreMessage in original order** — so the model sees exactly the sequence it generated against, including tool calls and results from prior turns. This is the correctness reason tool calls are persisted: an assistant turn that ended with a tool call must be followed by the tool result before the next assistant message, or the model has no record of what it did.
 
+**Send-time annotations on user messages.** During reconstruction, every user event's `text` is prefixed with a `[sent YYYY-MM-DD HH:MM:SS ZZZ]` marker derived from its `timestamp` field, formatted in the owner's local timezone. Get the timezone from `Intl.DateTimeFormat().resolvedOptions().timeZone` and format the zone as a short abbreviation (e.g. `PDT`, `EST`, `UTC`). This gives the model a "when" for every user message, and because the latest user message is at the end of the prompt, that message's timestamp also serves as the model's "now" for any duration calculations the user asks about ("how long since I said X?"). Assistant events are NOT prefixed — the model can infer its own timing from the bounding user messages, and the asymmetric format discourages the model from mimicking the prefix in its own replies.
+
 #### Append cadence and writers
 
 - **Append-only writes.** The router serializes per-conversation, so there's never a concurrent writer on the same file.
