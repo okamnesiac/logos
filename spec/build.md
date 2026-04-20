@@ -116,10 +116,11 @@ Use the Vercel AI SDK's `generateText` for automatic tool execution. Cap the mul
 
 The system prompt is concatenated from these sections, in order:
 
-1. **`config/SOUL.md`** (identity) — if missing, run the first-run flow (see step 4a).
-2. **Memory manifest** — see `architecture.md` → Memory format → Loading into context. Build it from the memory module's manifest output (step 4b).
-3. **Last 24 hours of `memory/journal/` entries inline** — recent agent-authored notes likely to be relevant; older journal entries appear in the manifest only.
-4. **Skills summary** — names and descriptions from `spec/skills/*/SKILL.md` and `config/skills/*/SKILL.md` frontmatter; config wins on name collision. Skills loader described in step 4b.
+1. **`spec/agent.md`** — the base prompt (role, behavior, tool/skill conventions, security).
+2. **`config/SOUL.md`** (identity) — if missing, run the first-run flow (see step 4a).
+3. **Memory manifest** — see `architecture.md` → Memory format → Loading into context. Build it from the memory module's manifest output (step 4b).
+4. **Last 24 hours of `memory/journal/` entries inline** — recent agent-authored notes likely to be relevant; older journal entries appear in the manifest only.
+5. **Skills summary** — names and descriptions from `spec/skills/*/SKILL.md` and `config/skills/*/SKILL.md` frontmatter; config wins on name collision. Skills loader described in step 4b.
 
 #### 4a. First-run flow
 
@@ -290,4 +291,4 @@ Verify the build before handing it off:
 
 ## When you're done
 
-Remove the reference to this file from `AGENTS.md` and `CLAUDE.md`. The build is complete.
+The build is complete. `AGENTS.md` stays as-is — it's the coding-agent entry point and is needed again for future `update agent` invocations.

@@ -447,6 +447,7 @@ spec/
 # Spec — tracked
 spec/
   architecture.md     # this file
+  agent.md            # base prompt loaded into the running assistant
   build.md            # build instructions for coding agents
   channels/           # channel recipes (markdown only)
     telegram.md

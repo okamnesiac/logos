@@ -71,6 +71,7 @@ The workspace is split into five sibling domains. Only `spec/` is tracked by thi
 README.md, CLAUDE.md, AGENTS.md   # workspace entry-point docs
 spec/                             # the blueprint
   architecture.md                 # system design
+  agent.md                        # base prompt for the running assistant
   build.md                        # build instructions for coding agents
   channels/                       # channel recipes (markdown)
   tools/                          # tool recipes (markdown)
