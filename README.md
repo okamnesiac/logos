@@ -20,20 +20,20 @@ Logos is an architecture specification — a set of documents precise enough tha
 You don't install Logos. You point an AI coding agent at it and say:
 
 ```
-bootstrap telegram
+bootstrap <channel>
 ```
 
-The agent reads the spec and generates the assistant.
+…where `<channel>` is whichever messaging platform you want (Telegram, WhatsApp, Discord, Slack, …). The agent reads the spec and generates the assistant.
 
 More specifically:
 
 1. **Clone the repo** — `git clone https://github.com/ninjudd/logos.git`. No fork needed; your personal state lives in nested repos (`agent/`, `config/`, `memory/`) created during bootstrap, which are gitignored here.
 2. **Point your AI coding agent at it** (Claude Code, Codex, etc.)
-3. **Tell the agent:** `bootstrap telegram` (or whichever channel you want)
+3. **Tell the agent:** `bootstrap telegram` (or whichever channel recipe under `spec/channels/` you prefer)
    - The coding agent reads `spec/` and generates the implementation in `agent/`. Approve its edits.
 4. **Fill in your API keys** in `config/.env`
 5. **Start it** — `agent/logos start`
-6. **Send it a message** — on first run, it'll ask for a name and personality
+6. **Talk to it** — DM the bot on your chosen channel, or run `agent/logos chat` for a local terminal chat over a Unix socket (always available, no messaging platform setup required). On first run, the agent asks for a name and personality.
 
 The repository contains no running code. It contains the spec. The coding agent reads the spec and generates the implementation.
 
@@ -52,7 +52,7 @@ A personal AI assistant that:
 
 ## Workspace layout
 
-The workspace is split into five sibling domains. Only `spec/` is tracked by this repo; the others are gitignored and may optionally be backed by their own repos.
+The workspace is split into five sibling domains. Only `spec/` is tracked by this repo. `agent/` is a nested Git repo (required — the self-edit auto-revert depends on `git` in that directory). `config/` and `memory/` are strongly recommended to be Git repos too; `runtime/` is never versioned.
 
 ```
 # Tracked by this repo
@@ -61,17 +61,18 @@ spec/                             # the blueprint
   architecture.md                 # system design
   build.md                        # build instructions for coding agents
   channels/                       # channel recipes (markdown)
+  tools/                          # tool recipes (markdown)
   skills/                         # bundled skills (markdown, agentskills.io format)
   cron/                           # default scheduled jobs (markdown)
 
-# Gitignored (or own repo)
+# Gitignored (own repo)
 agent/                            # generated implementation — TypeScript code
 config/                           # behavior — SOUL.md, instance overrides, .env
 memory/                           # durable state — facts, preferences, journal
 runtime/                          # ephemeral state — threads, logs, pid files
 ```
 
-The repo is the **spec** — the design. The bootstrap reads `spec/` and generates `agent/`. Each user has their own `agent/`, `config/`, and `memory/`, optionally as their own Git repos.
+The repo is the **spec** — the design. The bootstrap reads `spec/` and generates `agent/`. Each user has their own `agent/`, `config/`, and `memory/` as their own Git repos.
 
 See [spec/architecture.md](spec/architecture.md) for the full system design.
 
@@ -81,8 +82,4 @@ See [spec/architecture.md](spec/architecture.md) for the full system design.
 - **Files over databases.** Everything is plain files: identity, memory, skills, cron, and message history. No database, no driver, no schema. `cat` is your inspector.
 - **Specify the what, not the how.** The spec defines components and responsibilities. Implementation details are left to the coding agent.
 - **No speculative features.** Only what's needed for a working assistant.
-- **Four domains.** Engine, behavior, memory, and runtime are separate concerns with separate lifecycles.
-
-## Inspired by
-
-[NanoClaw](https://github.com/qwibitai/nanoclaw) — a brilliant minimal agent runtime. Logos asks: what if you went even more fundamental and didn't write any code at all?
+- **Five domains.** `spec/` (blueprint), `agent/` (engine), `config/` (behavior), `memory/` (knowledge), and `runtime/` (ephemeral state) are separate concerns with separate lifecycles.
