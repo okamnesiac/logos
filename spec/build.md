@@ -38,7 +38,7 @@ At minimum:
 - `PRIMARY_CHANNEL` — the channel used for the owner's main conversation (e.g. `telegram`). The scheduler sends replies here.
 - `PROTOS_SELF_EDIT` — `true` (default) or `false`. See `architecture.md` → Self-modification for the toggle's effects.
 - `PROTOS_TERMINAL` — `true` (default) or `false`. When false, the terminal channel doesn't bind the socket and `agent/protos chat` has no daemon to connect to.
-- `PROTOS_TERMINAL_SOCKET` — optional override for the terminal socket path. Defaults to `runtime/protos.sock`.
+- `PROTOS_TERMINAL_SOCKET` — optional override for the terminal socket path. Defaults to `runtime/agent.sock`.
 - `PROTOS_WEB_FETCH` — `true` (default) or `false`. When false, the `web_fetch` tool refuses every call.
 - `PROTOS_WEB_FETCH_BACKEND` — `fetch` (default), `jina`, or `playwright`. See `spec/tools/web_fetch.md` for tradeoffs and privacy considerations.
 - `PROTOS_WEB_FETCH_TIMEOUT_MS` — optional, default `15000`.
@@ -257,7 +257,7 @@ The script must be invoked from the workspace root (the parent of `agent/`). It 
 
 Run the process with `npx tsx agent/src/index.ts` (not compiled JS). This way the agent can modify its own TypeScript source and restart to apply changes — no build step needed.
 
-Use a PID file at `runtime/protos.pid` and write logs to `runtime/logs/`. Both are gitignored. Append to the log file — don't truncate it on restart.
+Use a PID file at `runtime/agent.pid` and write logs to `runtime/logs/`. Both are gitignored. Append to the log file — don't truncate it on restart.
 
 **`stop` must kill the entire process tree, not just the PID file's PID.** `npx tsx agent/src/index.ts` produces a multi-process tree (npm wrapper + tsx node child). If `stop` only kills the root PID, the children get re-parented to init and survive — invisible to the wrapper, still polling channels, still firing scheduled jobs. Each `restart` then leaks a zombie daemon. The wrapper must walk the process tree (e.g. via `pgrep -P` recursive descent — available on both macOS and Linux) and signal every descendant. Send SIGTERM first, give the tree a few seconds to shut down gracefully, then SIGKILL anything still alive.
 
@@ -268,7 +268,7 @@ Use a PID file at `runtime/protos.pid` and write logs to `runtime/logs/`. Both a
 3. **Stop the old process** (if running) and **start the new one** in the background.
 4. **Health check.** Wait a few seconds (e.g. 5s) and check if the new PID is still alive. If dead:
    - Print the last ~30 lines of the log so the user can see what crashed.
-   - If `agent/` is a Git repo and HEAD has moved since the snapshot: run `git -C agent reset --hard <snapshot-sha>` to revert the self-edit, then start the process again with the pre-edit code. Log the auto-revert clearly (`[protos] post-start check failed; auto-reverted agent to <sha> and restarted`).
+   - If `agent/` is a Git repo and HEAD has moved since the snapshot: run `git -C agent reset --hard <snapshot-sha>` to revert the self-edit, then start the process again with the pre-edit code. Log the auto-revert clearly (`[agent] post-start check failed; auto-reverted agent to <sha> and restarted`).
    - If no Git repo or HEAD is unchanged: leave the process stopped and tell the user to investigate.
 
 Auto-revert only affects commits the agent itself made between the snapshot and the failed restart. Changes in `config/` or `memory/` are not part of self-edit.
