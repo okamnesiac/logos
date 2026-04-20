@@ -9,7 +9,7 @@ Node standard library only — `node:net`, `node:fs/promises`, `node:fs`, `node:
 ## Environment variables
 
 - `PROTOS_TERMINAL` — `true` (default) or `false`. When false, the channel skips registering and the socket isn't created. No other env vars required.
-- `PROTOS_TERMINAL_SOCKET` — optional override for the socket path. Defaults to `runtime/protos.sock`.
+- `PROTOS_TERMINAL_SOCKET` — optional override for the socket path. Defaults to `runtime/agent.sock`.
 
 ## Channel identity
 
@@ -22,7 +22,7 @@ Zero setup. The channel is always generated during bootstrap. Start the daemon w
 
 ## Client-server protocol
 
-Unix socket at `runtime/protos.sock`. Messages are newline-delimited JSON.
+Unix socket at `runtime/agent.sock`. Messages are newline-delimited JSON.
 
 **Client → server:**
 
@@ -74,7 +74,7 @@ The flags `--from-start`, `--last N`, and `--new` override this default.
 
 ## Owner filtering
 
-None needed. The socket lives in the workspace filesystem; only processes with filesystem access to `runtime/protos.sock` can connect. Document that the socket should not be exposed over the network.
+None needed. The socket lives in the workspace filesystem; only processes with filesystem access to `runtime/agent.sock` can connect. Document that the socket should not be exposed over the network.
 
 ## Implementation notes
 

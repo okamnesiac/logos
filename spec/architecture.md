@@ -504,7 +504,7 @@ agent/
     threads.ts
     memory.ts
     cli/              # isolated client code — does not import router/agent/memory
-      chat.ts         # terminal client: connects to runtime/protos.sock
+      chat.ts         # terminal client: connects to runtime/agent.sock
     channels/         # built-in + custom channels (built-in generated from spec/channels/ recipes)
       terminal.ts     # bundled — zero-config client-server channel
       terminal-protocol.ts  # shared JSON message shapes (server + cli/chat.ts)
@@ -558,7 +558,7 @@ runtime/
   clients/            # per-client cursor files
     chat.cursor       # default terminal client
   logs/
-  protos.sock          # Unix socket for terminal channel
+  agent.sock          # Unix socket for terminal channel
   *.pid
   memory-graph.json   # backlink cache
 ```
