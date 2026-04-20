@@ -9,7 +9,7 @@ The shared pattern for turning conversation thread content into structured long-
 
 ## The core loop
 
-1. **`list_threads()`** — get every thread with its `total`, `cursor`, and `unconsolidated` count. Use this to decide which threads to process.
+1. **`list_threads({ min_unconsolidated? })`** — get threads with pending work. Defaults to `min_unconsolidated: 1` (any unconsolidated message). Raise the threshold to match your scope (e.g. `50` for `nap`-style opportunistic consolidation).
 2. For each thread you want to consolidate:
    1. **`read_thread_tail(channelId, conversationId)`** → `{ messages, newCursor }`. The messages are everything since the cursor.
    2. **Distill** the messages into memory. Update existing files (`edit_file`), create new ones (`write_file`), use `[[wiki-links]]` to connect notes, drop transient or routine content.

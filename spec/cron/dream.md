@@ -11,7 +11,7 @@ Daily deep consolidation. Distill every thread's unconsolidated tail, the day's 
 
 ### 1. Threads — full sweep with cross-thread correlation
 
-Use the `consolidate-memories` skill. Call `list_threads()` and run the read-tail → distill → advance loop on **every** thread with `unconsolidated > 0`, not just those over the `nap` threshold. Look for cross-thread patterns as you go (the same person mentioned in two channels, a decision in one thread that affects work in another).
+Use the `consolidate-memories` skill. Call `list_threads()` (the default `min_unconsolidated: 1` picks up every thread with pending work) and run the read-tail → distill → advance loop on each. Look for cross-thread patterns as you go (the same person mentioned in two channels, a decision in one thread that affects work in another).
 
 ### 2. Journal — promote anything worth keeping
 
