@@ -223,7 +223,7 @@ To disable a spec default, drop a config file with the same name and `enabled: f
 
 There is no central registry. Adding a job means dropping a file. The merged view (with source annotations) is available via `agent/logos cron`.
 
-When a job fires, the scheduler looks up the primary channel and sends the merged prompt to the agent through the router as a synthetic message addressed to the owner's main conversation. A reminder is appended: "If you have nothing to say to the owner, respond with exactly NO_REPLY — the bare token, no backticks, no quotes, no other content before or after." (The exact-match check is `text.trim() === "NO_REPLY"`, so any wrapping characters cause the reply to be sent as a normal message.)
+When a job fires, the scheduler looks up the primary channel and sends the merged prompt to the agent through the router as a synthetic message addressed to the owner's main conversation. A reminder is appended: "If you have nothing to say to the owner, respond with exactly NO_REPLY and nothing else."
 
 **Router rules for cron dispatch.** When the scheduler dispatches a cron job, it passes the `history` mode alongside the synthetic prompt. The cron log always receives the full run; the user thread always receives only the final assistant reply (or nothing on `NO_REPLY`). The `history` mode controls only what the agent reads on the way in:
 

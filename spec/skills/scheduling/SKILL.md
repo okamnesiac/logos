@@ -5,7 +5,7 @@ description: How scheduled jobs invoke you, how to add new ones, and how to queu
 
 # Scheduling
 
-You can be invoked two ways: by a user message, or by a scheduled job firing. When a job fires, the scheduler injects its synthetic prompt and your reply goes to the user's primary channel — this is your mechanism for proactive outreach. If there's nothing worth saying, reply with exactly NO_REPLY (the bare token — no backticks, no quotes, no other content before or after).
+You can be invoked two ways: by a user message, or by a scheduled job firing. When a job fires, the scheduler injects its synthetic prompt and your reply goes to the user's primary channel — this is your mechanism for proactive outreach. Reply with exactly NO_REPLY if there's nothing worth saying.
 
 ## Seeing current jobs
 

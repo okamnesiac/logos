@@ -31,4 +31,4 @@ After the updates above, do the orphan check and the promotion/demotion pass des
 
 ## Reply
 
-Post a brief summary of what changed (threads consolidated, items promoted, orphans dealt with), or NO_REPLY (exactly, no backticks or quotes) if it was a quiet day with nothing to report.
+Post a brief summary of what changed (threads consolidated, items promoted, orphans dealt with), or NO_REPLY if it was a quiet day with nothing to report.
