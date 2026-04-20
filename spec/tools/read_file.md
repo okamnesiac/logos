@@ -32,5 +32,5 @@ Node standard library (`node:fs/promises`).
 
 ## Implementation notes
 
-- Share path-safety helpers with `write_file` and `edit_file` (e.g., `agent/src/tools/_paths.ts`).
+- Share path-safety helpers with `write_file` and `edit_file` (e.g., `agent/src/tools/path-safety.ts`).
 - This tool does NOT participate in the `LOGOS_SELF_EDIT` guard — it's read-only.

@@ -143,7 +143,7 @@ Bundled tools to build (each has a recipe):
 
 Implementation conventions:
 
-- **Path-safety helper** — share a single `agent/src/tools/_paths.ts` (or similar) used by every path-taking tool. The helper resolves to absolute, rejects paths escaping the workspace root, and enforces the `spec/` and `agent/` write guards (see `architecture.md` → Self-modification for what those guards are and when they apply).
+- **Path-safety helper** — share a single helper module (e.g. `agent/src/tools/path-safety.ts`) used by every path-taking tool. The helper resolves to absolute, rejects paths escaping the workspace root, and enforces the `spec/` and `agent/` write guards (see `architecture.md` → Self-modification for what those guards are and when they apply).
 - **Memory graph cache invalidation** — any tool that writes under `memory/` (`write_file`, `edit_file`, `remember`, `add_memory`, `rename_memory`) must delete `runtime/memory-graph.json` so the next graph operation rebuilds.
 - **Resolution-preservation helper** — `add_memory` and `rename_memory` share the same pre/post snapshot → rewrite-changed-resolutions algorithm. Extract it as a single helper in `agent/src/memory.ts` and call it from both tools.
 - **Tool return shapes** follow `architecture.md` → Tool return shapes. Never return bare `null` from a tool.
@@ -178,33 +178,18 @@ What you must implement:
 
 Implement `agent/src/agents/runner.ts`. Tool contract is in `spec/tools/delegate_task.md`; design rationale and constraints are in `architecture.md` → Sub-agents.
 
-Single exported function `runSubAgent(args)` where `args` is:
+The runner takes the `delegate_task` inputs (prompt, skills, tools, optional model) plus enough context to write its log to the right place under the caller's log directory: a stable id for this particular call, and a parent-context discriminator describing whether the call originated from a cron run (carrying the job name and run timestamp) or a thread turn (carrying the channel id, conversation id, and turn id). The `delegate_task` tool wrapper knows which one applies and plumbs it through.
 
-```ts
-{
-  prompt: string,
-  skills: string[],
-  tools: string[],
-  model?: string,
-  callId: string,               // identifies this delegate_task invocation within its parent
-  parent:
-    | { kind: "cron", jobname: string, timestamp: string }
-    | { kind: "thread", channelId: string, conversationId: string, turn_id: string },
-}
-```
+Behavior:
 
-The explicit `parent` discriminator tells the runner where to write the sub-agent's log without pattern-matching a raw path.
-
-- **Resolve skills** by name from `spec/skills/` then `config/skills/` (config wins). Read the FULL `SKILL.md` body. Return `{ ok: false, error }` if any name is missing.
+- **Resolve skills** by name from `spec/skills/` then `config/skills/` (config wins). Read the FULL `SKILL.md` body. On any missing skill, fail the call.
 - **Resolve tools** from the loaded tools map (the same map `agent.ts` builds). **Always strip `delegate_task`** — sub-agents never recurse, regardless of caller request.
 - **Build the system prompt:** framing line + today's date + concatenated skill bodies (NO SOUL.md, NO memory manifest, NO conversation history).
-- **Compute the sub-agent log path** from `parent.kind` and `callId`:
-  - `kind: "cron"` → `runtime/logs/cron/{jobname}/{timestamp}/{callId}.jsonl`
-  - `kind: "thread"` → `runtime/logs/sub-agents/{channelId}/{conversationId}/{turn_id}-{callId}.jsonl`
-- **Call `generateText`** with the system prompt, the `prompt` as the user message, the resolved tool subset, the model from the argument or `AI_MODEL`, and a step limit equal to the main agent's (e.g. `stepCountIs(25)`). Append every event the sub-agent produces (user prompt, assistant steps, tool calls, tool results) to the sub-agent log using the same event schema as threads and cron logs.
-- **Return** `{ ok: true, response, sub_agent_log }` or `{ ok: false, error, sub_agent_log }` — where `sub_agent_log` is the workspace-relative path. The tool-loop machinery will include this return value in the parent's `tool_result` event automatically.
-
-The `delegate_task` tool wrapper is responsible for constructing the `parent` descriptor. It knows whether the agent-invocation context is a cron run or a thread turn; it passes that through to `runSubAgent`.
+- **Compute the sub-agent log path** from the parent context and call id:
+  - Cron parent → `runtime/logs/cron/{jobname}/{timestamp}/{callId}.jsonl`
+  - Thread parent → `runtime/logs/sub-agents/{channelId}/{conversationId}/{turn_id}-{callId}.jsonl`
+- **Call `generateText`** with the assembled system prompt, the prompt as the user message, the resolved tool subset, the model from the argument or `AI_MODEL`, and a step limit equal to the main agent's (e.g. `stepCountIs(25)`). Append every event the sub-agent produces (user prompt, assistant steps, tool calls, tool results) to the sub-agent log using the same event schema as threads and cron logs.
+- **Return** the final assistant text together with the workspace-relative log path. The tool-loop machinery will include this return value in the parent's `tool_result` event automatically — see `spec/tools/delegate_task.md` for the exact return shape.
 
 Framing line for the system prompt:
 
