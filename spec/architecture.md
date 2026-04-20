@@ -99,9 +99,11 @@ Because thread history is stored as append-only JSONL files, any channel with di
 
 1. Client stores its last-seen line index locally.
 2. On reconnect, client sends `{"from": N}`.
-3. Server reads lines `N..end` from `runtime/threads/{channelId}/{conversationId}.jsonl` and streams them as replay.
-4. Server watches the JSONL file (`fs.watch`) for new appends and streams those live.
+3. Server reads lines `N..end` from `runtime/threads/{channelId}/{conversationId}.jsonl`, **applies a render filter** (see below), and streams the resulting messages as replay.
+4. Server watches the JSONL file (`fs.watch`) for new appends, applies the same filter, and streams those live.
 5. Client updates its cursor as messages arrive.
+
+**Render filter.** The JSONL contains the full event stream (user messages, assistant steps with tool calls, tool results — see [Storage → Event schema](#event-schema)). The user-facing conversation is a collapsed view of that stream: for each `turn_id`, only the last assistant text is shown, and intermediate tool-call / tool-result events are hidden. Watch-based channels (e.g. terminal) must apply this filter server-side before emitting to clients; push-based channels (e.g. telegram) receive the final reply from the router's `send()` call and don't need to filter.
 
 This gives any client-server channel "pick up where I left off" semantics across reconnects — messages queued while no client was connected (e.g., cron firing at night) are delivered on next connect. See the terminal channel for the reference implementation.
 
@@ -186,7 +188,13 @@ Sub-agents are not pre-defined as separate entities. There is no `spec/agents/` 
 **Constraints:**
 
 - Sub-agents cannot spawn sub-agents. The runner strips `delegate_task` from the tool allowlist regardless of what the caller asks for. Single-level delegation, period.
-- The runner logs each invocation (skills, tools, model, duration, tokens) to `runtime/logs/` for operator visibility. Cost info is NOT surfaced to the calling agent.
+
+**Sub-agent logs.** Every `delegate_task` invocation writes its full event stream (same [event schema](#event-schema) as threads and cron logs) to a log file **nested under the caller's log**:
+
+- Called from a cron run: `runtime/logs/cron/{jobname}/{ISO-timestamp}/{call_id}.jsonl` — sibling directory to the parent's `{ISO-timestamp}.jsonl` file.
+- Called from a thread turn: `runtime/logs/sub-agents/{channelId}/{conversationId}/{turn_id}-{call_id}.jsonl`.
+
+The parent's `tool_result` event for the `delegate_task` call carries an additional `sub_agent_log` field with the workspace-relative path of the sub-agent log file, so the full trace is recursively navigable.
 
 See `spec/tools/delegate_task.md` for the full tool contract and build.md → step 4d for the runner implementation.
 
@@ -224,6 +232,15 @@ There is no central registry. Adding a job means dropping a file. The merged vie
 
 When a job fires, the scheduler looks up the primary channel and sends the merged prompt to the agent through the router as a synthetic message addressed to the owner's main conversation. A reminder is appended: "If you have nothing to say to the owner, respond with NO_REPLY." For `history: none` jobs the router skips the history fetch and runs the agent with just the synthetic prompt.
 
+**Where the events land** (see [Storage → Message history](#message-history-runtimethreads) for the event schema):
+
+| `history:` | Cron log (`runtime/logs/cron/…`) | User thread (primary channel) |
+|---|---|---|
+| `primary` | full run: `cron_start`, synthetic user prompt, all agent/tool events, `cron_end` | synthetic user prompt, all agent/tool events |
+| `none` | full run: `cron_start`, synthetic user prompt, all agent/tool events, `cron_end` | only the final assistant reply (or nothing on `NO_REPLY`) |
+
+`cron_start` / `cron_end` events exist only in cron logs. They carry the job name, schedule, duration, and final reply for audit purposes. The two files are independent records — matching entries line up by timestamp.
+
 ### 5. Self-modification
 
 The agent can edit its own source code (`agent/src/`) via its file-edit tools (`write_file`, `edit_file`). TypeScript runs directly with `tsx` — no build step. To apply code changes, the agent restarts itself using the `agent/logos restart` wrapper script.
@@ -254,16 +271,45 @@ Everything is plain files — no database. Files break down by domain:
 
 ### Message history (`runtime/threads/`)
 
-One JSONL file per conversation, at `runtime/threads/{channelId}/{conversationId}.jsonl`. Each line is one message:
+One JSONL file per conversation, at `runtime/threads/{channelId}/{conversationId}.jsonl`. Each line is one **event** — a single LLM message in the AI SDK `CoreMessage` shape.
 
-```jsonl
-{"role":"user","text":"hi","timestamp":"2026-04-18T10:30:00.000Z"}
-{"role":"assistant","text":"hello!","timestamp":"2026-04-18T10:30:02.000Z"}
+#### Event schema
+
+```ts
+type Event =
+  | { role: "user", text: string, turn_id: string, timestamp: string }
+  | { role: "assistant", text: string, tool_calls?: ToolCall[], turn_id: string, timestamp: string }
+  | { role: "tool", tool_call_id: string, result: unknown, turn_id: string, timestamp: string }
+  | { role: "system", type: "cron_start", job: string, schedule: string, turn_id: string, timestamp: string }
+  | { role: "system", type: "cron_end", reply: string, duration_ms: number, turn_id: string, timestamp: string }
+
+type ToolCall = { id: string, tool: string, args: unknown }
 ```
 
+Snake_case throughout the wire format. Tool calls are bundled with the assistant message they were part of (mirroring AI SDK and Anthropic API conventions). Tool results are separate events with `role: "tool"`. The optional `sub_agent_log` field on a tool result points to a nested log file; see [Sub-agents](#sub-agents).
+
+#### `turn_id`
+
+Every event produced by a single agent invocation shares one `turn_id`. A user message is its own turn; the assistant invocation that responds (potentially producing multiple text + tool_call + tool events through the multi-step loop) shares a different `turn_id`.
+
+`turn_id` exists for **rendering**: each channel decides what to show per turn (default: only the last assistant text of the turn — see channel recipes for specifics). It is NOT used by the LLM context builder, which preserves the full event sequence regardless.
+
+#### LLM context (replay)
+
+When the agent runs, the router reads the JSONL and reconstructs a `CoreMessage[]` to pass to `generateText`. **Each event becomes one CoreMessage in original order** — so the model sees exactly the sequence it generated against, including tool calls and results from prior turns. This is the correctness reason tool calls are persisted: an assistant turn that ended with a tool call must be followed by the tool result before the next assistant message, or the model has no record of what it did.
+
+#### Append cadence and writers
+
 - **Append-only writes.** The router serializes per-conversation, so there's never a concurrent writer on the same file.
-- **Reads** load the whole file and parse it; for a personal assistant this is fine even across years of conversation.
+- Each event is appended as it happens (user message → user event; assistant step → assistant event; tool call → tool event). One agent invocation typically appends multiple events.
+- **Reads** load the whole file and parse it line-by-line; for a personal assistant this is fine even across years of conversation.
 - **Backup** is just copying the directory.
+
+### Cron logs (`runtime/logs/cron/`)
+
+One JSONL file per cron run, at `runtime/logs/cron/{jobname}/{ISO-timestamp}.jsonl`. Uses the [same event schema](#event-schema) as threads, with `cron_start` and `cron_end` system events bracketing the run. For `history: none` jobs (dream, nap) the cron log is the primary audit trail; for `history: primary` jobs (heartbeat) the cron log is an additional record — the same agent/tool events also land in the user's thread. See [Scheduler](#4-scheduler) for which events go where.
+
+No retention policy — kept forever. Small text, useful for the agent to reflect on past runs via `read_file`.
 
 ### Identity, behavior, memory, ephemeral
 
@@ -277,7 +323,7 @@ All plain files spread across the domains:
 - **`memory/journal/`** — daily scratch pad files (e.g., `memory/journal/2026-03-09.md`). The agent jots notes throughout the day; the `dream` cron promotes important items into the rest of `memory/`.
 - **`memory/new/`** — inbox folder. The agent writes new notes here when there's no obvious folder yet (use `add_memory("new/{name}", content)`). The `dream` cron sorts the inbox into appropriate folders. Prefer confident placement (`add_memory` directly into the right folder) when you know where it belongs; use the inbox only when genuinely unsure.
 - **`memory/archive/`** — cold storage for content `dream` decided isn't currently useful but might be worth keeping. Exempt from the orphan check — things here don't need to be reachable from a root file. Use `rename_memory("{name}", "archive/{name}")` to move something into the archive.
-- **`runtime/`** — `threads/`, `logs/`, `*.pid`, `memory-graph.json` (backlink cache), and per-thread consolidation cursors (sidecar `*.cursor` files next to each `*.jsonl`; see **Memory consolidation** below).
+- **`runtime/`** — `threads/` (conversation JSONLs + per-thread consolidation cursor sidecars), `logs/cron/{jobname}/{ISO}.jsonl` (one per cron run), `logs/cron/{jobname}/{ISO}/{call_id}.jsonl` (sub-agent logs), `logs/sub-agents/` (thread-originated sub-agent logs — see [Sub-agents](#sub-agents)), `*.pid`, `memory-graph.json` (backlink cache). See **Memory consolidation** below for cursor details.
 
 ## Memory format
 

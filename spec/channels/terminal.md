@@ -44,14 +44,25 @@ The `thinking` event is broadcast to all connected clients when a user-originate
 
 ## Cursor-based replay
 
-The conversation lives at `runtime/threads/terminal/cli.jsonl` like any other channel. Each line is a message with an implicit index (its line number).
+The conversation lives at `runtime/threads/terminal/cli.jsonl` like any other channel. Each line is an event in the [shared schema](../architecture.md#event-schema).
 
 When a client connects:
 
 1. Client sends `{"from": N}` — the last index it has seen locally.
-2. Server reads lines `N..end` from the JSONL file and streams them as `replay` messages.
+2. Server reads lines `N..end` from the JSONL file, applies the [render filter](#render-filter) to collapse multi-step turns into a single displayable message, and streams the results as `replay` messages.
 3. Server emits `{"type": "live-start"}` to signal the client is caught up.
-4. Server subscribes to the JSONL file via `fs.watch` and streams new appends as `message` events.
+4. Server subscribes to the JSONL file via `fs.watch` and streams new appends (filtered the same way) as `message` events.
+
+### Render filter
+
+The JSONL stores the full agent event stream (user messages, assistant steps with tool calls, tool results). The client only wants to see the user-facing conversation. The server collapses events per `turn_id` before emitting to clients:
+
+- `user` events → emitted as-is.
+- `assistant` events → only the **last** assistant text per `turn_id` is emitted (intermediate "Let me check…" texts from multi-step turns are skipped).
+- `tool_call` parts inside assistant events, and `role: "tool"` events → **not emitted** to the client in the default view.
+- `system` events (`cron_start`, `cron_end`) → **not emitted** to the client.
+
+The `index` carried on each emitted event is the JSONL line index of the last event in that turn — so the client's cursor still points at a valid position for resuming later.
 
 The client stores its cursor at `runtime/clients/{session}.cursor` (default session: `chat`). The default replay window on connect is computed as `from = min(stored_cursor, total - 20)` — show **at least the last 20 messages** for context, plus everything queued since the last disconnect if that span is longer. This means:
 
@@ -68,8 +79,8 @@ None needed. The socket lives in the workspace filesystem; only processes with f
 ## Implementation notes
 
 - The channel's `register()` is called once at daemon startup. It creates the socket server, registers the accept handler, and returns `{ channelId, ownerConversationId: "cli", send }`.
-- The `send` function is called by the router with agent replies. It appends to the JSONL file (which the router already does via `threads.appendMessage`) — no direct socket write needed. All connected clients pick it up via their `fs.watch` subscription.
-- Wait: the router ALREADY calls `appendMessage`. So the channel's `send` doesn't need to write to JSONL. But it DOES need to watch the JSONL file so it can push new lines to connected clients. Separate concerns: the channel maintains one `fs.watch` per connected client (or one watch shared across clients — implementation choice).
+- The `send` function is called by the router with agent replies. No direct socket write is needed: the router has already appended events to the JSONL via `threads.appendEvent` as the agent produced them, and connected clients pick up new lines via their `fs.watch` subscription.
+- The channel maintains one `fs.watch` per connected client (or one watch shared across clients — implementation choice). On each new line, apply the [render filter](#render-filter) and emit to clients.
 - On daemon shutdown, close all client sockets and remove the socket file.
 
 ### Thinking indicator

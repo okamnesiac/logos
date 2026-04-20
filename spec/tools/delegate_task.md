@@ -27,11 +27,12 @@ The sub-agent has only what you give it. Always specify both `skills` and `tools
 ## Output
 
 ```ts
-{ ok: true, response: string }
-| { ok: false, error: string }
+{ ok: true, response: string, sub_agent_log: string }
+| { ok: false, error: string, sub_agent_log: string }
 ```
 
-`response` is the sub-agent's final assistant message as plain text. If you need structured data, ask for JSON in the prompt.
+- `response` — the sub-agent's final assistant message as plain text. If you need structured data, ask for JSON in the prompt.
+- `sub_agent_log` — workspace-relative path to the sub-agent's full event-stream log (JSONL), for debugging or reflection. The path is nested under the caller's log (see `architecture.md` → [Sub-agents](architecture.md#sub-agents) for the exact layout).
 
 ## Behavior
 
@@ -45,8 +46,10 @@ The runner (in `agent/src/agents/runner.ts`):
    - For each skill, the full SKILL.md body (frontmatter optional — body is what matters).
    - **Not included:** SOUL.md, memory manifest, recent journal, conversation history.
 4. **Call `generateText`** with the assembled system prompt, the `prompt` as the user message, the resolved tool subset, the chosen model, and a step limit (initially the same as the main agent's, e.g. `stepCountIs(25)`).
-5. **Log the invocation** to `runtime/logs/` with sub-agent invocation metadata (skills, tools, model, duration, tokens used). Don't return cost info to the calling agent — purely operator visibility.
-6. **Return** the sub-agent's final assistant text as `{ ok: true, response }` or any thrown error as `{ ok: false, error }`.
+5. **Write the event-stream log.** Every event the sub-agent produces (user prompt, assistant steps, tool calls, tool results) appends to the sub-agent's log file using the same [event schema](../architecture.md#event-schema) as threads and cron logs. The log path is determined by the caller:
+   - Called from a cron run: `runtime/logs/cron/{jobname}/{ISO-timestamp}/{call_id}.jsonl`
+   - Called from a thread turn: `runtime/logs/sub-agents/{channelId}/{conversationId}/{turn_id}-{call_id}.jsonl`
+6. **Return** the sub-agent's final assistant text as `{ ok: true, response, sub_agent_log }` or any thrown error as `{ ok: false, error, sub_agent_log }`. The parent's `tool_result` event (written automatically by the tool-loop machinery) includes this full return value, so the sub-agent log path travels with the parent's record.
 
 ## Constraints
 
