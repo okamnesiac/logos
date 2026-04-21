@@ -246,7 +246,8 @@ That's it. No HTTP server needed unless a channel requires a webhook.
 
 Create a bash script at `agent/protos` that supports:
 
-- `agent/protos` or `agent/protos start` — start the process in the background
+- `agent/protos` (no args) — print a usage message listing the subcommands and exit.
+- `agent/protos start` — start the process in the background
 - `agent/protos stop` — stop it
 - `agent/protos restart` — restart it (with safe-restart protocol below)
 - `agent/protos status` — check if it's running
