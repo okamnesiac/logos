@@ -62,7 +62,7 @@ The JSONL stores the full agent event stream (user messages, assistant steps wit
 - An assistant event's `tool_calls` field, and `role: "tool"` events → **not emitted** to the client in the default view.
 - `audit` events (`cron_start`, `cron_end`) → **not emitted** to the client.
 
-The `index` carried on each emitted event is the JSONL line index of the last event in that turn — so the client's cursor still points at a valid position for resuming later.
+The `index` carried on each emitted message is the JSONL line index of the event that sourced it — the user event for a user message, the chosen assistant-text event for a collapsed assistant reply. The filter is idempotent on any prefix of the stream: re-running it as new events append produces the same messages with the same indices, so the client's `lastEmittedIndex` check dedupes re-emits when a turn grows.
 
 The client stores its cursor at `runtime/clients/{session}.cursor` (default session: `chat`). The default replay window on connect is computed as `from = min(stored_cursor, total - 20)` — show **at least the last 20 messages** for context, plus everything queued since the last disconnect if that span is longer. This means:
 
