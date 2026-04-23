@@ -96,9 +96,4 @@ When you discover a non-obvious pattern yourself (a private API, a stable select
 
 ## Disabling
 
-Two layers, light to heavy:
-
-- **Per-task off** — owner unticks "Allow remote debugging for this browser instance". Daemon binary is still installed but `browser-harness` calls fail at the connection step; you fall back to `web_fetch`.
-- **Permanent off** — `uv tool uninstall browser-harness` removes the binary from `$PATH`. The `shell` invocation fails with "command not found"; same fallback applies.
-
-There's no env-var kill switch — the toggle and the uninstall together cover the spectrum.
+Untick "Allow remote debugging for this browser instance" in Chrome. `browser-harness` calls fail at the connection step and you fall back to `web_fetch`. That's the only off switch — uninstalling the binary doesn't help, since this skill walks the owner through reinstalling it next time you need a browser.
