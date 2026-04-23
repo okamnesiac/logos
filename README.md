@@ -59,7 +59,7 @@ test agent
 
 The agent reads `spec/` for the invariants and contracts the implementation must satisfy (tool return shapes, the call/result pairing rule, the skill loader's flat-scan + dual-form + merge behavior, render-filter rules, and so on), writes tests in `agent/test/` that exercise them, and runs the suite. Tests use [vitest](https://vitest.dev) by default.
 
-`test agent` is always a manual step — bootstrap and `update agent` don't run it for you, even after you've used it once.
+`test agent` is always a manual step — bootstrap and `update agent` don't run it for you.
 
 ## What you get
 
