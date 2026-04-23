@@ -43,7 +43,7 @@ Verify install with `browser-harness --doctor` (this won't connect to Chrome yet
 
 ## Chrome remote-debugging toggle
 
-To let `browser-harness` drive Chrome, the owner ticks **"Allow remote debugging for this browser instance"** at `chrome://inspect/#remote-debugging`. The page shows "Server running at: 127.0.0.1:9222" once it's live.
+The owner enables `browser-harness` access by ticking **"Allow remote debugging for this browser instance"** at `chrome://inspect/#remote-debugging`. The page shows "Server running at: 127.0.0.1:9222" once it's live. Unticking the same checkbox is the only off switch — `browser-harness` calls then fail at the connection step and you fall back to `web_fetch`. (Uninstalling the binary doesn't help; this skill would just walk the owner through reinstalling it.)
 
 Whether they leave it on or toggle it per-task depends on the deployment:
 
@@ -93,7 +93,3 @@ When you discover a non-obvious pattern yourself (a private API, a stable select
 - The owner asked for something that would require their auth on a service they haven't used in this thread or in memory. Confirm first — "I'd be using your logged-in {service} session for this; OK?"
 - Any action that spends money, sends a message, or makes a public post. Confirm.
 - Anything resembling scraping at scale, automated account creation, or evading rate limits / bot detection. Refuse and explain.
-
-## Disabling
-
-Untick "Allow remote debugging for this browser instance" in Chrome. `browser-harness` calls fail at the connection step and you fall back to `web_fetch`. That's the only off switch — uninstalling the binary doesn't help, since this skill walks the owner through reinstalling it next time you need a browser.
