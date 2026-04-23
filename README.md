@@ -49,6 +49,18 @@ The agent pulls the latest `spec/`, diffs it against your `agent/` tree, shows w
 
 Only `agent/` is regenerated. Your `config/`, `memory/`, and `runtime/` are left alone.
 
+## Testing (optional)
+
+To generate or refresh tests that verify your `agent/` matches the spec, point your coding agent at the workspace and say:
+
+```
+test agent
+```
+
+The agent reads `spec/` for the invariants and contracts the implementation must satisfy (tool return shapes, the call/result pairing rule, the skill loader's flat-scan + dual-form + merge behavior, render-filter rules, and so on), writes tests in `agent/test/` that exercise them, and runs the suite. Tests use [vitest](https://vitest.dev) by default.
+
+This is **opt-in** — bootstrap and `update agent` never write tests on their own; the assistant runs fine without them. Tests earn their keep once you start customizing the implementation, since a regression in a spec-defined behavior shows up immediately instead of in the next conversation.
+
 ## What you get
 
 A personal AI assistant that:

@@ -312,5 +312,10 @@ For the `update agent` command — sync an existing implementation when the spec
 2. **Propose the changes** to the user — a per-file summary is more useful than a raw diff. Apply once they approve.
 3. **Commit inside `agent/`** with a message summarizing what changed. The commit is required: the safe-restart auto-revert depends on `agent/` having a clean `HEAD` (same reason the bootstrap commits — see step 1a).
 4. **Leave `config/`, `memory/`, and `runtime/` alone.** Spec changes regenerate `agent/` only.
+5. **Never touch `agent/test/`.** Even if tests already exist there, refreshing them is always a separate, manual `test agent` invocation — see `spec/test.md`. Don't auto-update tests, don't auto-run them, don't mention them.
 
 End with a clean working tree in `agent/`, same invariant as bootstrap.
+
+## Testing
+
+Test contract for the `test agent` command lives in `spec/test.md`. **Bootstrap and `update agent` never touch `agent/test/`** — testing is always a separate, manual invocation, even when tests already exist.
