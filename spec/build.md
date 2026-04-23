@@ -120,7 +120,7 @@ The system prompt is concatenated from these sections, in order:
 2. **`config/SOUL.md`** (identity) — if missing, run the first-run flow (see step 4a).
 3. **Memory manifest** — see `architecture.md` → Memory format → Loading into context. Build it from the memory module's manifest output (step 4b).
 4. **Last 24 hours of `memory/journal/` entries inline** — recent agent-authored notes likely to be relevant; older journal entries appear in the manifest only.
-5. **Skills summary** — pulled from `spec/skills/*/SKILL.md` and `config/skills/*/SKILL.md` frontmatter; config wins on name collision. Each entry is formatted as `- <name> (<path to SKILL.md>) — <description>` so the agent can open the full skill body via `read_file` with the exact path. Skills loader described in step 4b.
+5. **Skills summary** — pulled from `spec/skills/*.md`, `config/skills/*.md`, and `config/skills/*/SKILL.md` frontmatter; config wins on name collision. Each entry is formatted as `- <name> (<path>) — <description>` so the agent can open the full skill body via `read_file` with the exact path. Skills loader described in step 4b.
 
 #### 4a. First-run flow
 
@@ -162,7 +162,11 @@ The module exports:
 - **Cache** — write the graph to `runtime/memory-graph.json`. On startup, check the cache: if all source file mtimes are ≤ the cache's mtime, use it; otherwise rebuild.
 - **Frontmatter parser** — use `js-yaml` to parse the YAML block between `---` delimiters. Tolerate missing or malformed frontmatter (treat as empty).
 
-Skills loader: scan both `spec/skills/` and `config/skills/` for directories containing `SKILL.md`. Extract the YAML frontmatter with `js-yaml` (not regex). On name collision, `config/` wins.
+Skills loader:
+
+- `spec/skills/`: scan for `*.md` files. The filename (minus `.md`) is the skill name.
+- `config/skills/`: scan for both `*.md` files (filename = skill name) and subdirectories containing `SKILL.md` (directory name = skill name). The directory form is for off-the-shelf agentskills.io skills the user drops in unmodified.
+- Extract YAML frontmatter with `js-yaml` (not regex). On name collision (within or across roots), `config/` wins; within `config/`, prefer the flat `*.md` form if both exist.
 
 #### 4c. Self-edit enforcement
 
@@ -172,7 +176,7 @@ What you must implement:
 
 - **Always-on `spec/` write guard** in the paths helper: any path under `{workspace}/spec/` throws `spec/ is read-only at runtime; instance-specific changes belong in config/`. Independent of `PROTOS_SELF_EDIT`.
 - **Conditional `agent/` write guard** when `PROTOS_SELF_EDIT=false`: paths under `{workspace}/agent/` throw `self-edit is disabled; refusing to write under agent/`.
-- **Skills loader filter** when `PROTOS_SELF_EDIT=false`: skip the `self-edit` directory in `spec/skills/` so the skill is hidden from the agent's prompt.
+- **Skills loader filter** when `PROTOS_SELF_EDIT=false`: skip `spec/skills/self-edit.md` so the skill is hidden from the agent's prompt.
 - **Shell tool description nudges**: always include the `spec/` warning; conditionally append the `agent/` warning when `PROTOS_SELF_EDIT=false`. These are conventions, not enforcement.
 
 #### 4d. Sub-agent runner
@@ -183,7 +187,7 @@ The runner takes the `delegate_task` inputs (prompt, skills, tools, optional mod
 
 Behavior:
 
-- **Resolve skills** by name from `spec/skills/` then `config/skills/` (config wins). Read the FULL `SKILL.md` body. On any missing skill, fail the call.
+- **Resolve skills** by name from `spec/skills/` then `config/skills/` (config wins). Read the FULL skill body — the `{name}.md` file or the `{name}/SKILL.md` body, whichever the loader registered. On any missing skill, fail the call.
 - **Resolve tools** from the loaded tools map (the same map `agent.ts` builds). **Always strip `delegate_task`** — sub-agents never recurse, regardless of caller request.
 - **Build the system prompt:** framing line + today's date + concatenated skill bodies (NO SOUL.md, NO memory manifest, NO conversation history).
 - **Compute the sub-agent log path** from the parent context and call id:

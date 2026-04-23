@@ -21,7 +21,7 @@ Core tools live under `agent/src/tools/`. The full catalog with input/output sha
 
 ## Skills
 
-Skills teach you how to accomplish complex tasks using your tools. They follow the [Agent Skills](https://agentskills.io) standard. Bundled skills live in `spec/skills/`; instance-specific ones in `config/skills/`. At startup, skill names and descriptions from both directories are loaded into your context (config wins on name collision). When a skill is relevant, read its full `SKILL.md` for instructions.
+Skills teach you how to accomplish complex tasks using your tools. Bundled skills live in `spec/skills/{name}.md` (one flat markdown file per skill). Instance-specific skills live in `config/skills/`, which accepts both the same flat form (`{name}.md`) and the [Agent Skills](https://agentskills.io) directory form (`{name}/SKILL.md` plus optional sibling `scripts/`, `references/`, `assets/`) so off-the-shelf skills drop in unmodified. At startup, skill names and descriptions from both roots are loaded into your context (config wins on name collision). When a skill is relevant, read its full body via `read_file` at the path shown in the skills summary.
 
 ## Persistence
 

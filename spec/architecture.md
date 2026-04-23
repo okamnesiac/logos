@@ -4,7 +4,7 @@
 
 Protos is a single-process personal AI assistant. Messages come in from messaging channels, get processed by an AI agent, and responses go back out through the same channels.
 
-The workspace is organized into **five sibling domains**, each with a distinct role and lifecycle:
+The workspace is organized into **six sibling domains**, each with a distinct role and lifecycle:
 
 ```
 protos/                # workspace root
@@ -12,12 +12,13 @@ protos/                # workspace root
   agent/              # generated implementation — code that the bootstrap produces
   config/             # behavior — identity, instance overrides, .env
   memory/             # durable state — facts, preferences, journal
+  vendor/             # external tooling — third-party clones the agent uses
   runtime/            # ephemeral state — message threads, logs, pid files
 ```
 
-Only `spec/` (and the workspace entry-point docs) is tracked by this repo. `agent/`, `config/`, and `memory/` are sibling directories — gitignored here and **strongly recommended** to be their own Git repos (see [Git repos per domain](#git-repos-per-domain) below). `runtime/` is local-only.
+Only `spec/` (and the workspace entry-point docs) is tracked by this repo. `agent/`, `config/`, and `memory/` are sibling directories — gitignored here and **strongly recommended** to be their own Git repos (see [Git repos per domain](#git-repos-per-domain) below). `vendor/` is also gitignored here; each of its subdirectories is its own external repo with its own upstream. `runtime/` is local-only.
 
-## The five domains
+## The six domains
 
 ### `spec/` — the blueprint
 
@@ -44,6 +45,14 @@ Behavior reads context, but context does not define behavior.
 What the agent knows and is committed to: facts, preferences, summaries, journal entries, durable task state. Per-user, private. Optionally a separate Git repo.
 
 Granular files, not one consolidated file — Git history is more useful when changes are line-item rather than whole-file.
+
+### `vendor/` — external tooling
+
+Third-party tools the agent shells out to: cloned repos, editable installs, anything that lives outside the protos codebase but the agent uses regularly. One subdirectory per vendored tool (`vendor/browser-harness/`, …), each its own external Git repo with its own lifecycle.
+
+Per-instance and gitignored by this repo. Skills that depend on a vendored tool name the canonical install path (`vendor/{name}/`) so the agent has one place to look. The agent may edit files inside `vendor/` (per the relevant skill — typically by delegating to a coding agent), but those edits are local to the vendored repo, not commits in `agent/` or `spec/`.
+
+Empty by default — vendored tools are opt-in, installed when a skill walks the owner through setup.
 
 ### `runtime/` — ephemeral state
 
@@ -92,6 +101,10 @@ The router stores `NO_REPLY` literally in the JSONL and passes it through to `se
 The literal `NO_REPLY` token is matched exactly (`text.trim() === "NO_REPLY"`) — substring matches don't count. If the model wants to discuss the convention (e.g., "I respond with NO_REPLY when…"), the surrounding content makes it a normal reply.
 
 This contract is general — any new channel MUST handle the `NO_REPLY` marker correctly. Don't repeat this rule in per-channel recipes; recipes mention only platform-specific cleanup details (e.g., "clear the typing-refresh interval" for Telegram).
+
+#### Dispatch-error surfacing
+
+If a `router.dispatch` call throws, the channel's error handler replies to the owner with the actual error message (e.g. `dispatch error: Your credit balance is too low…`). No generic placeholder — the audience is one person and the real error is what tells them what to fix.
 
 #### Cursor-based replay
 
@@ -154,24 +167,24 @@ Tool return values get JSON-serialized and shown to the model. Two conventions:
 
 The invariant is achieved by wrapping each tool's `execute` at registration time with an error-catching adapter. If the underlying call throws, the adapter returns `{ error: <message> }` as the result instead of propagating the throw. This keeps the LLM SDK's normal success path — including the entry in `step.toolResults` — so the dispatch layer's `onStep` callback writes a corresponding `tool` event to the thread.
 
-**Skills** are markdown instruction files that teach the agent how to accomplish complex tasks using its tools. Bundled skills live in `spec/skills/`, instance-specific skills in `config/skills/`. Both directories are scanned at startup; on name collision, `config/` wins.
+**Skills** are markdown instruction files that teach the agent how to accomplish complex tasks using its tools. Bundled skills live in `spec/skills/{name}.md` — flat, one file per skill. Instance-specific skills live in `config/skills/`, which accepts both the same flat `{name}.md` form and the agentskills.io directory form (`{name}/SKILL.md` plus optional `scripts/`, `references/`, `assets/` sibling directories) so off-the-shelf skills drop in unmodified. Both roots are scanned at startup; on name collision, `config/` wins.
 
 **Identity** comes from `config/SOUL.md`, written on first run. The agent reads it on every invocation.
 
 **Long-term memory** comes from the `memory/` directory. The system prompt includes a manifest of **root-level files only** (name + summary); subfolder files are reached by following `[[wiki-links]]` from a root file. Full content is fetched on demand via `find_memory` and `read_file`. See **Memory format** below.
 
-**Self-awareness.** The agent learns about its scheduled-job invocation mode via the bundled `scheduling` skill (`spec/skills/scheduling/SKILL.md`), whose name and description appear in the skills summary at startup. Without this, the agent doesn't know cron exists and may tell the user it can't reach out proactively — which is wrong; cron firings are exactly the proactive-outreach mechanism.
+**Self-awareness.** The agent learns about its scheduled-job invocation mode via the bundled `scheduling` skill (`spec/skills/scheduling.md`), whose name and description appear in the skills summary at startup. Without this, the agent doesn't know cron exists and may tell the user it can't reach out proactively — which is wrong; cron firings are exactly the proactive-outreach mechanism.
 
 #### Sub-agents
 
 The agent can spawn focused sub-agents via the `delegate_task` tool. A sub-agent is a separate `generateText` invocation with:
 
 - A task-specific prompt (written by the main agent at call time)
-- An explicit list of skills (full SKILL.md bodies inlined into its system prompt)
+- An explicit list of skills (full skill bodies inlined into its system prompt)
 - An explicit allowlist of tools (a subset of what the main agent has)
 - An isolated context — no SOUL.md, no memory manifest, no conversation history
 
-Sub-agents are not pre-defined as separate entities. There is no `spec/agents/` directory. The skills system already provides reusable behavior templates; `delegate_task` just lets the main agent compose them on demand into a focused sub-task. To make a sub-agent specialty reusable, write a regular skill in `spec/skills/{name}/`.
+Sub-agents are not pre-defined as separate entities. There is no `spec/agents/` directory. The skills system already provides reusable behavior templates; `delegate_task` just lets the main agent compose them on demand into a focused sub-task. To make a sub-agent specialty reusable, write a regular skill in `spec/skills/{name}.md`.
 
 **When to delegate:**
 
@@ -323,7 +336,7 @@ All plain files spread across the domains:
 
 - **`config/SOUL.md`** — identity. The agent writes this on first run after asking the user for a name and personality. Read on every invocation.
 - **`config/cron/`** — instance-specific scheduled jobs (markdown).
-- **`config/skills/`** — instance-specific skills (markdown, agentskills.io directory format).
+- **`config/skills/`** — instance-specific skills. Accepts both the spec's flat `{name}.md` form and the agentskills.io directory form (`{name}/SKILL.md` + optional `scripts/`).
 - **Custom channels and tools** live in `agent/src/channels/` and `agent/src/tools/` alongside the built-in ones — `config/` holds no code.
 - **`memory/`** — granular markdown files of long-term knowledge. See **Memory format** below.
 - **`memory/journal/`** — daily scratch pad files (e.g., `memory/journal/2026-03-09.md`). The agent jots notes throughout the day; the `dream` cron promotes important items into the rest of `memory/`.
@@ -429,7 +442,7 @@ The agent also creates `config/`, `memory/`, and `runtime/` directories on first
 ## Startup flow
 
 1. Ensure `runtime/` directory exists (`runtime/threads/` is created lazily on first message)
-2. Discover skills (scan `spec/skills/` and `config/skills/` for `SKILL.md` files; load names and descriptions; config overrides spec on name collision)
+2. Discover skills (scan `spec/skills/*.md`; scan `config/skills/` for both `*.md` and `*/SKILL.md`; load names and descriptions; config overrides spec on name collision)
 3. Discover tools (scan `agent/src/tools/`)
 4. Register channels (scan `agent/src/channels/`; each checks for credentials and connects if present). If no channels connect, exit with an error.
 5. Start the scheduler (scan `spec/cron/` and `config/cron/`; merge by filename per the layering rules above)
@@ -471,19 +484,15 @@ spec/
     read_thread_tail.md    # consolidation: read messages since cursor
     advance_thread_cursor.md  # consolidation: mark messages consolidated
     find_orphans.md        # memory hygiene: unreachable non-root files
-  skills/             # bundled skills (agentskills.io directory format)
-    self-edit/
-      SKILL.md
-    git/
-      SKILL.md
-    coding/
-      SKILL.md
-    scheduling/
-      SKILL.md
-    consolidation/
-      SKILL.md
-    memory/
-      SKILL.md
+  skills/             # bundled skills (one .md per skill — flat, not the agentskills.io directory format)
+    self-edit.md
+    git.md
+    coding.md
+    scheduling.md
+    consolidation.md
+    memory.md
+    update.md
+    browser-use.md
   cron/               # default cron jobs (markdown with frontmatter)
     heartbeat.md
     nap.md
@@ -532,7 +541,7 @@ config/
   SOUL.md             # written on first run
   .env                # secrets
   cron/               # instance-specific or override jobs (markdown)
-  skills/             # instance-specific skills (markdown)
+  skills/             # instance-specific skills — accepts both flat {name}.md and agentskills.io {name}/SKILL.md form
 
 # Durable state — gitignored, optionally a separate repo
 memory/
@@ -545,6 +554,11 @@ memory/
     2026-03-10.md
   new/                # inbox — agent writes here when no obvious folder yet
   archive/            # cold storage — exempt from the orphan check
+
+# External tooling — gitignored, each subdir is its own external repo
+vendor/
+  browser-harness/    # cloned + installed by the browser-use skill on demand
+  ...                 # one subdir per vendored tool
 
 # Ephemeral — gitignored, never a repo
 runtime/
@@ -569,7 +583,7 @@ Channels and tools are **code** — they live in `agent/src/`, which is the user
 |---|---|---|---|
 | **Channels** | `spec/channels/{name}.md` | `agent/src/channels/{name}.ts` | No — single code root |
 | **Tools** | `spec/tools/{name}.md` | `agent/src/tools/{name}.ts` | No — single code root |
-| **Skills** | `spec/skills/{name}/SKILL.md` (built-in) + `config/skills/{name}/SKILL.md` (user) | none | Yes — two-root, config wins |
+| **Skills** | `spec/skills/{name}.md` (built-in) + `config/skills/{name}.md` *or* `config/skills/{name}/SKILL.md` (user) | none | Yes — two-root, config wins |
 | **Cron** | `spec/cron/{name}.md` (default) + `config/cron/{name}.md` (override) | none | Yes — two-root, frontmatter override + body append |
 
 The asymmetry is intentional:
@@ -579,7 +593,7 @@ The asymmetry is intentional:
 
 Rules:
 
-- **Filename = capability name.** No central registry. The loader scans the directory for `*.ts` files (channels, tools) or `*.md` files / `{name}/SKILL.md` (cron, skills) and registers each one.
+- **Filename = capability name.** No central registry. The loader scans the directory for `*.ts` files (channels, tools) or `*.md` files (cron, skills, with `config/skills/` additionally accepting `{name}/SKILL.md` for off-the-shelf agentskills.io drops) and registers each one.
 - **Recipes describe; implementations execute.** A recipe in `spec/channels/telegram.md` tells the bootstrap how to build `agent/src/channels/telegram.ts`. Recipes never name the implementation path explicitly — the path is determined by their own location.
 - **Custom channels don't need spec recipes.** A user adding a channel directly to `agent/src/channels/` can colocate the optional `.md` alongside it, or skip the recipe entirely.
 
@@ -609,6 +623,7 @@ This keeps the bootstrap simple (no manifest tracking, no merge logic) and makes
 | `agent/` | read + self-edit via skill | read/write | read/write |
 | `config/` | read/write | read/write | read/write |
 | `memory/` | read/write | read/write | read/write |
+| `vendor/` | read + exec; edits via the relevant skill (typically delegated to a coding agent) | read/write | read/write |
 | `runtime/` | read/write | read-only | read/write |
 
 Read `runtime/` to debug. Modify the source domains (`spec/`, `agent/`, `config/`, `memory/`) to fix.
@@ -623,6 +638,7 @@ Each domain has its own lifecycle, so each should have its own Git repo:
 | `agent/` | **Strongly recommended** | History and rollback for self-edits; portable across machines |
 | `config/` | **Recommended** | Sync behavior/identity across machines |
 | `memory/` | **Recommended** (private) | Durable knowledge with line-item history |
+| `vendor/` | Per subdir (each is its own external repo) | Each vendored tool already has its own upstream Git history; nothing extra to manage at the `vendor/` level |
 | `runtime/` | Never | Ephemeral state, not versioned |
 
 Why `agent/` matters most: self-edit depends on it. If `agent/` is a Git repo, the wrapper can auto-revert a bad edit when the new process crashes on startup. Without a Git repo, a bad edit that passes `tsc --noEmit` but crashes at runtime becomes a manual recovery problem.
@@ -645,7 +661,7 @@ cd memory && git init  # commits happen as the agent learns
 
 - **Keep it simple.** One file per component. Minimal abstractions.
 - **No over-engineering.** Don't build plugin systems, middleware chains, or event buses. Direct function calls are fine.
-- **Fail gracefully.** If a channel can't connect, log it and move on. Don't crash the process.
+- **Fail gracefully.** If a channel can't connect, log it and move on. Don't crash the process. The entry point installs top-level `unhandledRejection` and `uncaughtException` handlers that log the error and keep the daemon running — a single failure (API billing, transient network, a bug in one handler) must not take down every channel and cron job.
 - **Log usefully.** Log when channels connect, when messages are received/sent, and when errors occur.
 
 ## Security considerations

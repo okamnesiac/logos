@@ -1,5 +1,5 @@
 # The spec repo only tracks the workspace shell + spec/.
-# agent/, config/, memory/, runtime/ are sibling domains owned elsewhere
+# agent/, config/, memory/, vendor/, runtime/ are sibling domains owned elsewhere
 # (own repos, or unmanaged folders). Whitelist what we track.
 
 /*

@@ -1,6 +1,6 @@
 # delegate_task
 
-Spawn a focused sub-agent to handle a task in an isolated context. The sub-agent gets a task-specific prompt, an explicit list of skills (full SKILL.md bodies inlined), and an explicit allowlist of tools. Its work doesn't pollute the main agent's context — only its final response comes back.
+Spawn a focused sub-agent to handle a task in an isolated context. The sub-agent gets a task-specific prompt, an explicit list of skills (full skill bodies inlined), and an explicit allowlist of tools. Its work doesn't pollute the main agent's context — only its final response comes back.
 
 ## Description (shown to the model)
 
@@ -18,7 +18,7 @@ The sub-agent has only what you give it. Always specify both `skills` and `tools
 ```ts
 {
   prompt: string,        // The task description. Be specific about what you want returned.
-  skills: string[],      // Skill names to load. The full SKILL.md body of each gets inlined into the sub-agent's system prompt. Pass [] for no skills.
+  skills: string[],      // Skill names to load. The full body of each gets inlined into the sub-agent's system prompt. Pass [] for no skills.
   tools: string[],       // Tool names the sub-agent may call. Pass [] for no tools (purely a thinking task).
   model?: string,        // Optional model override. Defaults to AI_MODEL.
 }
@@ -38,12 +38,12 @@ The sub-agent has only what you give it. Always specify both `skills` and `tools
 
 The runner (in `agent/src/agents/runner.ts`):
 
-1. **Resolve skills.** For each name in `skills`, find the SKILL.md (search `spec/skills/` then `config/skills/`, config wins on collision). Read the full body. If any skill is missing, return `{ ok: false, error: "skill not found: {name}" }`.
+1. **Resolve skills.** For each name in `skills`, find the skill body — search `spec/skills/{name}.md`, then `config/skills/{name}.md`, then `config/skills/{name}/SKILL.md`; config wins on collision. Read the full body. If any skill is missing, return `{ ok: false, error: "skill not found: {name}" }`.
 2. **Resolve tools.** For each name in `tools`, fetch the tool definition from the loaded tools map. If any tool is missing, return `{ ok: false, error: "tool not found: {name}" }`.
 3. **Build the sub-agent system prompt:**
    - A short framing line: "You are a focused sub-agent invoked by the main Protos agent. Complete the task and return your final response. You have no access to the main agent's identity, memory, or conversation history beyond what's stated below."
    - Today's date.
-   - For each skill, the full SKILL.md body (frontmatter optional — body is what matters).
+   - For each skill, the full body (frontmatter optional — body is what matters).
    - **Not included:** SOUL.md, memory manifest, recent journal, conversation history.
 4. **Call `generateText`** with the assembled system prompt, the `prompt` as the user message, the resolved tool subset, the chosen model, and a step limit (initially the same as the main agent's, e.g. `stepCountIs(25)`).
 5. **Write the event-stream log.** Every event the sub-agent produces (user prompt, assistant steps, tool calls, tool results) appends to the sub-agent's log file using the same [event schema](../architecture.md#event-schema) as threads and cron logs. The log path is determined by the caller:
