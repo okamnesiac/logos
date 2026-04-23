@@ -120,7 +120,7 @@ The system prompt is concatenated from these sections, in order:
 2. **`config/SOUL.md`** (identity) — if missing, run the first-run flow (see step 4a).
 3. **Memory manifest** — see `architecture.md` → Memory format → Loading into context. Build it from the memory module's manifest output (step 4b).
 4. **Last 24 hours of `memory/journal/` entries inline** — recent agent-authored notes likely to be relevant; older journal entries appear in the manifest only.
-5. **Skills summary** — pulled from `spec/skills/*.md`, `config/skills/*.md`, and `config/skills/*/SKILL.md` frontmatter; config wins on name collision. Each entry is formatted as `- <name> (<path>) — <description>` so the agent can open the full skill body via `read_file` with the exact path. Skills loader described in step 4b.
+5. **Skills summary** — pulled from `spec/skills/*.md`, `config/skills/*.md`, and `config/skills/*/SKILL.md` frontmatter; config merges with spec on name collision (see step 4b). Each entry is formatted as `- <name> (<paths joined with " + ">) — <description>` so the agent can open the full skill body via `read_file` — for a merged skill, both source files together.
 
 #### 4a. First-run flow
 
@@ -166,7 +166,13 @@ Skills loader:
 
 - `spec/skills/`: scan for `*.md` files. The filename (minus `.md`) is the skill name.
 - `config/skills/`: scan for both `*.md` files (filename = skill name) and subdirectories containing `SKILL.md` (directory name = skill name). The directory form is for off-the-shelf agentskills.io skills the user drops in unmodified.
-- Extract YAML frontmatter with `js-yaml` (not regex). On name collision (within or across roots), `config/` wins; within `config/`, prefer the flat `*.md` form if both exist.
+- Extract YAML frontmatter with `js-yaml` (not regex).
+- **Within `config/`**, if both flat (`{name}.md`) and directory (`{name}/SKILL.md`) forms exist for the same name, the flat form wins. Within-config collisions are not merged.
+- **Across roots**, when the same name exists in spec and config, merge:
+  - **Frontmatter** — per-field. Config wins on collision; spec fills in keys not present in config. No deep merge — array and map fields replace wholesale on collision.
+  - **Body** — spec body + `\n\n` + config body.
+  - Spec-only or config-only skills pass through unchanged.
+- Each skill entry tracks the source paths it was assembled from (one for unmerged, two for merged) so the system prompt summary can show both.
 
 #### 4c. Self-edit enforcement
 

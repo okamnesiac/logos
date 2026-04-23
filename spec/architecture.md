@@ -26,7 +26,7 @@ The architecture documents (`architecture.md`, `build.md`), channel recipes, bun
 
 The running agent reads from `spec/` directly for skills and cron defaults. Spec updates take effect on the next agent restart — no copy step, no drift.
 
-`spec/` is **read-only at runtime**. The file-edit tools (`write_file`, `edit_file`) refuse any path under `spec/` regardless of other settings; `shell` carries a description nudge with the same rule. Spec changes happen out-of-band — via PR or via a coding agent invoked outside the running daemon. Instance-specific extensions to skills and cron go in `config/skills/` / `config/cron/`, which the loader merges over `spec/` at startup (config wins).
+`spec/` is **read-only at runtime**. The file-edit tools (`write_file`, `edit_file`) refuse any path under `spec/` regardless of other settings; `shell` carries a description nudge with the same rule. Spec changes happen out-of-band — via PR or via a coding agent invoked outside the running daemon. Instance-specific extensions to skills and cron go in `config/skills/` / `config/cron/`, which the loader merges with `spec/` at startup — config frontmatter wins, config body appends to spec body. See the **Layering** notes under Skills and Scheduler for details.
 
 ### `agent/` — generated implementation
 
@@ -167,7 +167,14 @@ Tool return values get JSON-serialized and shown to the model. Two conventions:
 
 The invariant is achieved by wrapping each tool's `execute` at registration time with an error-catching adapter. If the underlying call throws, the adapter returns `{ error: <message> }` as the result instead of propagating the throw. This keeps the LLM SDK's normal success path — including the entry in `step.toolResults` — so the dispatch layer's `onStep` callback writes a corresponding `tool` event to the thread.
 
-**Skills** are markdown instruction files that teach the agent how to accomplish complex tasks using its tools. Bundled skills live in `spec/skills/{name}.md` — flat, one file per skill. Instance-specific skills live in `config/skills/`, which accepts both the same flat `{name}.md` form and the agentskills.io directory form (`{name}/SKILL.md` plus optional `scripts/`, `references/`, `assets/` sibling directories) so off-the-shelf skills drop in unmodified. Both roots are scanned at startup; on name collision, `config/` wins.
+**Skills** are markdown instruction files that teach the agent how to accomplish complex tasks using its tools. Bundled skills live in `spec/skills/{name}.md` — flat, one file per skill. Instance-specific skills live in `config/skills/`, which accepts both the same flat `{name}.md` form and the agentskills.io directory form (`{name}/SKILL.md` plus optional `scripts/`, `references/`, `assets/` sibling directories) so off-the-shelf skills drop in unmodified.
+
+**Layering.** When a skill with the same name exists in both roots, the merged skill uses:
+
+- **Frontmatter:** config wins on field collisions; missing config fields fall through to spec.
+- **Body:** spec first, then config appended. Lets the user (or the agent itself) extend a default skill without restating it. Same rule as cron — agents tend to extend skills more often than replace them outright, so append-by-default is the right shape.
+
+The skills summary in the system prompt shows both source paths for a merged skill (e.g. `spec/skills/X.md + config/skills/X.md`) so the agent knows where each part came from when re-reading. Within `config/`, if both flat (`{name}.md`) and directory (`{name}/SKILL.md`) forms exist for the same name, the flat form wins — these are not merged into each other, only the winning config form merges with the spec.
 
 **Identity** comes from `config/SOUL.md`, written on first run. The agent reads it on every invocation.
 
@@ -442,7 +449,7 @@ The agent also creates `config/`, `memory/`, and `runtime/` directories on first
 ## Startup flow
 
 1. Ensure `runtime/` directory exists (`runtime/threads/` is created lazily on first message)
-2. Discover skills (scan `spec/skills/*.md`; scan `config/skills/` for both `*.md` and `*/SKILL.md`; load names and descriptions; config overrides spec on name collision)
+2. Discover skills (scan `spec/skills/*.md`; scan `config/skills/` for both `*.md` and `*/SKILL.md`; load names and descriptions; on name collision, merge — config frontmatter wins, config body appended to spec body)
 3. Discover tools (scan `agent/src/tools/`)
 4. Register channels (scan `agent/src/channels/`; each checks for credentials and connects if present). If no channels connect, exit with an error.
 5. Start the scheduler (scan `spec/cron/` and `config/cron/`; merge by filename per the layering rules above)
@@ -583,7 +590,7 @@ Channels and tools are **code** — they live in `agent/src/`, which is the user
 |---|---|---|---|
 | **Channels** | `spec/channels/{name}.md` | `agent/src/channels/{name}.ts` | No — single code root |
 | **Tools** | `spec/tools/{name}.md` | `agent/src/tools/{name}.ts` | No — single code root |
-| **Skills** | `spec/skills/{name}.md` (built-in) + `config/skills/{name}.md` *or* `config/skills/{name}/SKILL.md` (user) | none | Yes — two-root, config wins |
+| **Skills** | `spec/skills/{name}.md` (built-in) + `config/skills/{name}.md` *or* `config/skills/{name}/SKILL.md` (user) | none | Yes — two-root, frontmatter override + body append |
 | **Cron** | `spec/cron/{name}.md` (default) + `config/cron/{name}.md` (override) | none | Yes — two-root, frontmatter override + body append |
 
 The asymmetry is intentional:

@@ -21,7 +21,9 @@ Core tools live under `agent/src/tools/`. The full catalog with input/output sha
 
 ## Skills
 
-Skills teach you how to accomplish complex tasks using your tools. Bundled skills live in `spec/skills/{name}.md` (one flat markdown file per skill). Instance-specific skills live in `config/skills/`, which accepts both the same flat form (`{name}.md`) and the [Agent Skills](https://agentskills.io) directory form (`{name}/SKILL.md` plus optional sibling `scripts/`, `references/`, `assets/`) so off-the-shelf skills drop in unmodified. At startup, skill names and descriptions from both roots are loaded into your context (config wins on name collision). When a skill is relevant, read its full body via `read_file` at the path shown in the skills summary.
+Skills teach you how to accomplish complex tasks using your tools. Bundled skills live in `spec/skills/{name}.md` (one flat markdown file per skill). Instance-specific skills live in `config/skills/`, which accepts both the same flat form (`{name}.md`) and the [Agent Skills](https://agentskills.io) directory form (`{name}/SKILL.md` plus optional sibling `scripts/`, `references/`, `assets/`) so off-the-shelf skills drop in unmodified. At startup, skill names and descriptions from both roots are loaded into your context.
+
+When a skill exists in both `spec/skills/` and `config/skills/` under the same name, the loader **merges** them — frontmatter fields from config win on collision (spec fills in missing fields), and the config body is appended to the spec body. The skills summary line shows both source paths (`spec/skills/X.md + config/skills/X.md`) for merged skills. To see the full merged body, `read_file` each path and concatenate (spec first, then config). To **extend** a built-in skill rather than replace it, drop a same-named file in `config/skills/` containing only the additions — they layer onto the spec body automatically.
 
 ## Persistence
 
