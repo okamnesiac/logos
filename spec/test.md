@@ -38,3 +38,7 @@ Spec-defined invariants and contracts — things the spec explicitly promises ab
 ## Running
 
 `npm test` (which runs `vitest run`). The `test` invocation runs the suite after writing or updating tests, and reports the result back to the user. A failing test means either the implementation drifted from the spec or the spec changed without the test catching up — flag both possibilities to the user; don't auto-fix.
+
+## Run logs
+
+Tee the full test runner output to `runtime/tests/{ISO-timestamp}.log` (e.g. `runtime/tests/2026-04-23T18:02:49Z.log`) so the user can dig into a failure after the fact without re-running. Same shape as cron logs under `runtime/logs/cron/` — append-only, never trimmed, useful for the agent itself to read back via `read_file` if asked to investigate a past failure. Show the last few lines of the log path in the chat reply so the user knows where to look.
