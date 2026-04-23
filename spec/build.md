@@ -4,7 +4,7 @@ Step-by-step instructions for building Protos from the spec. Read `architecture.
 
 All paths in this document are **relative to the workspace root** (the directory that contains `spec/`, `agent/`, `config/`, etc.). Run all commands from there.
 
-The bootstrap reads from `spec/` (recipes, skills, cron defaults, this document) and generates code in `agent/`. After bootstrap, the running agent reads from `spec/` (skills, cron) and `agent/` (its own implementation), with `config/` for instance overrides.
+The build reads from `spec/` (recipes, skills, cron defaults, this document) and generates code in `agent/`. After build, the running agent reads from `spec/` (skills, cron) and `agent/` (its own implementation), with `config/` for instance overrides.
 
 ## Before you start
 
@@ -21,7 +21,7 @@ Don't worry about the assistant's name or personality — those are configured o
 - `@ai-sdk/anthropic` and `@ai-sdk/openai` — AI SDK providers, both installed by default so users can switch between Claude and GPT via `AI_MODEL` alone. Other providers (`@ai-sdk/google`, etc.) can be added as needed.
 - `js-yaml` — YAML parsing for cron frontmatter and skill frontmatter
 - `node-cron` — cron expression scheduling
-- `tsx` — TypeScript execution without a build step. The agent can modify its own source and restart to apply changes.
+- `tsx` — TypeScript execution without a compile step. The agent can modify its own source and restart to apply changes.
 - `zod` — schema validation, required by the AI SDK for tool parameter definitions
 - Channel-specific libraries — see the chosen recipe in `spec/channels/`
 
@@ -66,13 +66,13 @@ For each of `agent/`, `config/`, `memory/`: if the directory does not already co
 
 Per-domain specifics:
 
-- **`agent/`** — write `agent/.gitignore` (ignore `node_modules/`, `*.log`, `*.pid`). Then `git add -A && git commit -m "bootstrap"`.
+- **`agent/`** — write `agent/.gitignore` (ignore `node_modules/`, `*.log`, `*.pid`). Then `git add -A && git commit -m "build"`.
 - **`config/`** — write `config/.gitignore` that ignores `.env`, `.env.*` (and allows `.env.example` if used). **Never commit `.env`** — it contains secrets. After writing the gitignore and the `.env` template, `git add .gitignore && git commit -m "initial config"`. The `.env` file stays untracked.
 - **`memory/`** — write `memory/.gitignore` (ignore `.obsidian/` for Obsidian vault settings). `git add -A && git commit -m "initial state"`. If `memory/` is empty, commit just the gitignore.
 
 If any of these directories already has a `.git/`, leave it alone — the user is managing it.
 
-**Commit additional changes as you make them.** If the bootstrap process edits generated files after the initial commit (e.g., you notice a bug and fix it), make a follow-up commit. End the bootstrap with a clean working tree in each repo.
+**Commit additional changes as you make them.** If the build process edits generated files after the initial commit (e.g., you notice a bug and fix it), make a follow-up commit. End the build with a clean working tree in each repo.
 
 ### 2. Set up message storage
 
@@ -126,7 +126,7 @@ The system prompt is concatenated from these sections, in order:
 
 If `config/SOUL.md` doesn't exist when the agent assembles its system prompt:
 
-- Use a minimal bootstrap system prompt: "You are a new personal AI assistant named Protos. You haven't been configured yet. On your next reply, introduce yourself and ask the user (1) what to call yourself and (2) how you should act — personality, tone, style. Once they answer, use `write_file` with `mode: \"create\"` to create `config/SOUL.md` with the chosen name and personality. Nothing else belongs in that file — memory, skills, and other context are loaded separately."
+- Use a minimal first-run system prompt: "You are a new personal AI assistant named Protos. You haven't been configured yet. On your next reply, introduce yourself and ask the user (1) what to call yourself and (2) how you should act — personality, tone, style. Once they answer, use `write_file` with `mode: \"create\"` to create `config/SOUL.md` with the chosen name and personality. Nothing else belongs in that file — memory, skills, and other context are loaded separately."
 - After the user answers, the agent writes `config/SOUL.md`. Subsequent invocations read it normally.
 - Also ensure `config/`, `memory/`, and `runtime/` directories exist; create them if not.
 
@@ -221,7 +221,7 @@ Read the recipe at `spec/channels/{name}.md` and follow its setup instructions. 
 
 ### 6b. Build the terminal channel (always included)
 
-Terminal is a zero-dependency, bundled channel shipped with every bootstrap. Follow `spec/channels/terminal.md` for the protocol, replay semantics, and rendering rules. Implementation lives at `agent/src/channels/terminal.ts` (server) and `agent/src/cli/chat.ts` (client). Wired into the wrapper as `agent/protos chat` (see step 9).
+Terminal is a zero-dependency, bundled channel shipped with every build. Follow `spec/channels/terminal.md` for the protocol, replay semantics, and rendering rules. Implementation lives at `agent/src/channels/terminal.ts` (server) and `agent/src/cli/chat.ts` (client). Wired into the wrapper as `agent/protos chat` (see step 9).
 
 The `PROTOS_TERMINAL=false` env var disables the channel: the server doesn't bind the socket, and the channel registry skips it.
 
@@ -232,7 +232,7 @@ Implement `agent/src/scheduler.ts`. Cron format, merge rules, the merged-job tab
 - Scan both `spec/cron/` and `config/cron/`, parse frontmatter with `js-yaml`, merge per the layering rules (frontmatter override, body append; skip when merged `enabled: false`).
 - Use `node-cron` to schedule each enabled job using its merged `schedule` field.
 - When a job fires:
-   1. **Bootstrap guard.** If `config/SOUL.md` doesn't exist, skip the firing entirely — log a one-line note and return. The agent isn't ready to respond to cron prompts; the next firing after bootstrap works normally.
+   1. **First-run guard.** If `config/SOUL.md` doesn't exist, skip the firing entirely — log a one-line note and return. The agent isn't ready to respond to cron prompts; the next firing after first-run setup works normally.
    2. Generate a run timestamp `ISO` and open the cron log at `runtime/logs/cron/{jobname}/{ISO}.jsonl`.
    3. Append a `cron_start` audit event (job name, schedule, `turn_id`, timestamp).
    4. Append the cron reminder (see `architecture.md` → Scheduler) to the merged body. Then dispatch through the router as a synthetic message. Pass the cron log file handle so the router can append each agent/tool event to it.
@@ -266,7 +266,7 @@ Create a bash script at `agent/protos` that supports:
 
 The script must be invoked from the workspace root (the parent of `agent/`). It should `cd` to the workspace root if invoked from elsewhere by resolving its own location.
 
-Run the process with `npx tsx agent/src/index.ts` (not compiled JS). This way the agent can modify its own TypeScript source and restart to apply changes — no build step needed.
+Run the process with `npx tsx agent/src/index.ts` (not compiled JS). This way the agent can modify its own TypeScript source and restart to apply changes — no compile step needed.
 
 Use a PID file at `runtime/agent.pid` and write logs to `runtime/logs/`. Both are gitignored. Append to the log file — don't truncate it on restart.
 
@@ -293,9 +293,9 @@ Verify the build before handing it off:
 - `agent/protos start` with blank credentials then `agent/protos status` reports not running
 - `config/SOUL.md` does not exist yet (it's written on first run, not by the build)
 - `spec/cron/heartbeat.md`, `spec/cron/nap.md`, and `spec/cron/dream.md` are unchanged
-- `spec/` is untouched by the build (the bootstrap only writes to `agent/` and optionally creates `config/`)
+- `spec/` is untouched by the build (the build only writes to `agent/` and optionally creates `config/`)
 - The wrapper script is executable (`chmod +x agent/protos`)
-- `git -C agent log --oneline` shows at least one commit (the `bootstrap` anchor — critical for safe-restart auto-revert)
+- `git -C agent log --oneline` shows at least one commit (the `build` anchor — critical for safe-restart auto-revert)
 - `git -C agent status` is clean (no uncommitted changes)
 - `git -C config log --oneline` shows at least one commit; `config/.env` is NOT in the commit
 - `git -C memory log --oneline` shows at least one commit
@@ -310,9 +310,9 @@ For the `update` command — sync an existing implementation when the spec evolv
 
 1. **Identify the delta.** Read `spec/` as-is and compare against the current `agent/` tree. `git log` on the spec repo is useful for surfacing recent changes.
 2. **Propose the changes** to the user — a per-file summary is more useful than a raw diff. Apply once they approve.
-3. **Commit inside `agent/`** with a message summarizing what changed. The commit is required: the safe-restart auto-revert depends on `agent/` having a clean `HEAD` (same reason the bootstrap commits — see step 1a).
+3. **Commit inside `agent/`** with a message summarizing what changed. The commit is required: the safe-restart auto-revert depends on `agent/` having a clean `HEAD` (same reason the build commits — see step 1a).
 4. **Leave `config/`, `memory/`, and `runtime/` alone.** Spec changes regenerate `agent/` only.
-End with a clean working tree in `agent/`, same invariant as bootstrap.
+End with a clean working tree in `agent/`, same invariant as build.
 
 ## Testing
 

@@ -4,12 +4,12 @@ This workspace is a spec for building a personal AI assistant ("the agent"). If 
 
 The user may invoke you with:
 
-- **`bootstrap <channel>`** — first-time generation. Read `spec/build.md` and generate the implementation in `agent/` for the named channel (telegram, slack, discord, …).
+- **`build <channel>`** — first-time generation. Read `spec/build.md` and generate the implementation in `agent/` for the named channel (telegram, slack, discord, …).
 - **`update`** — sync an existing implementation with spec changes. Follow `spec/build.md` → Updating.
-- **`test`** *(optional)* — generate or refresh tests in `agent/test/` that verify the implementation matches the spec, then run them. Follow `spec/test.md`. This is the **only** invocation that touches `agent/test/` — bootstrap and update never write, run, or mention tests.
+- **`test`** *(optional)* — generate or refresh tests in `agent/test/` that verify the implementation matches the spec, then run them. Follow `spec/test.md`. This is the **only** invocation that touches `agent/test/` — build and update never write, run, or mention tests.
 
 Start with:
 
-- `spec/build.md` — the bootstrap sequence
+- `spec/build.md` — the build sequence
 - `spec/architecture.md` — system design
 - `spec/agent.md` — the base prompt loaded into the running assistant at runtime

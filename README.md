@@ -20,16 +20,16 @@ Protos is an architecture specification — a set of documents precise enough th
 You don't install Protos. You point an AI coding agent at it and say:
 
 ```
-bootstrap <channel>
+build <channel>
 ```
 
 …where `<channel>` is whichever messaging platform you want (Telegram, WhatsApp, Discord, Slack, …). The agent reads the spec and generates the assistant.
 
 More specifically:
 
-1. **Clone the repo** — `git clone https://github.com/ninjudd/protos.git`. No fork needed; your personal state lives in nested repos (`agent/`, `config/`, `memory/`) created during bootstrap, which are gitignored here.
+1. **Clone the repo** — `git clone https://github.com/ninjudd/protos.git`. No fork needed; your personal state lives in nested repos (`agent/`, `config/`, `memory/`) created during build, which are gitignored here.
 2. **Point your AI coding agent at it** (Claude Code, Codex, etc.)
-3. **Tell the agent:** `bootstrap telegram` (or whichever channel recipe under `spec/channels/` you prefer)
+3. **Tell the agent:** `build telegram` (or whichever channel recipe under `spec/channels/` you prefer)
    - The coding agent reads `spec/` and generates the implementation in `agent/`. Approve its edits.
 4. **Fill in your API keys** in `config/.env`
 5. **Start it** — `agent/protos start`
@@ -39,7 +39,7 @@ The repository contains no running code. It contains the spec. The coding agent 
 
 ## Updating
 
-When the spec evolves, sync your implementation the same way you bootstrapped it. Point your coding agent at the workspace and say:
+When the spec evolves, sync your implementation the same way you built it. Point your coding agent at the workspace and say:
 
 ```
 update
@@ -59,7 +59,7 @@ test
 
 The agent reads `spec/` for the invariants and contracts the implementation must satisfy (tool return shapes, the call/result pairing rule, the skill loader's flat-scan + dual-form + merge behavior, render-filter rules, and so on), writes tests in `agent/test/` that exercise them, and runs the suite. Tests use [vitest](https://vitest.dev) by default.
 
-`test` is always a manual step — bootstrap and `update` don't run it for you.
+`test` is always a manual step — build and `update` don't run it for you.
 
 ## What you get
 
@@ -97,7 +97,7 @@ memory/                           # durable state — facts, preferences, journa
 runtime/                          # ephemeral state — threads, logs, pid files
 ```
 
-The repo is the **spec** — the design. The bootstrap reads `spec/` and generates `agent/`. Each user has their own `agent/`, `config/`, and `memory/` as their own Git repos.
+The repo is the **spec** — the design. The build reads `spec/` and generates `agent/`. Each user has their own `agent/`, `config/`, and `memory/` as their own Git repos.
 
 See [spec/architecture.md](spec/architecture.md) for the full system design.
 

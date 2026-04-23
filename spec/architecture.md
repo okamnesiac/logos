@@ -9,7 +9,7 @@ The workspace is organized into **six sibling domains**, each with a distinct ro
 ```
 protos/                # workspace root
   spec/               # the blueprint — architecture, build, recipes, defaults
-  agent/              # generated implementation — code that the bootstrap produces
+  agent/              # generated implementation — code that the build produces
   config/             # behavior — identity, instance overrides, .env
   memory/             # durable state — facts, preferences, journal
   vendor/             # external tooling — third-party clones the agent uses
@@ -30,7 +30,7 @@ The running agent reads from `spec/` directly for skills and cron defaults. Spec
 
 ### `agent/` — generated implementation
 
-The TypeScript code produced by the bootstrap: `index.ts`, `router.ts`, the channel implementation(s) the user chose, the built-in tool implementations, the wrapper script. Gitignored by this repo. Optionally a separate Git repo if you want to commit your specific implementation.
+The TypeScript code produced by the build: `index.ts`, `router.ts`, the channel implementation(s) the user chose, the built-in tool implementations, the wrapper script. Gitignored by this repo. Optionally a separate Git repo if you want to commit your specific implementation.
 
 The agent edits its own source under `agent/src/` via the `self-edit` skill.
 
@@ -87,7 +87,7 @@ Channels are messaging platform integrations. Each channel:
 
 **Main chat:** The `PRIMARY_CHANNEL` environment variable names the channel used for the owner's main conversation (e.g., `telegram`). The scheduler sends replies to the owner's conversation on this channel.
 
-**Recipes vs implementations:** Channel **recipes** (`.md` setup guides) live in `spec/channels/` — they describe how to build each channel. Channel **implementations** (`.ts` code) live in `agent/src/channels/`. Both built-in channels (generated from spec recipes by the bootstrap) and custom channels (added by the user) live in the same directory — the `agent/` repo is the user's own implementation, so there's no need for a parallel code location in `config/`.
+**Recipes vs implementations:** Channel **recipes** (`.md` setup guides) live in `spec/channels/` — they describe how to build each channel. Channel **implementations** (`.ts` code) live in `agent/src/channels/`. Both built-in channels (generated from spec recipes by the build) and custom channels (added by the user) live in the same directory — the `agent/` repo is the user's own implementation, so there's no need for a parallel code location in `config/`.
 
 #### Channel `send()` contract
 
@@ -444,7 +444,7 @@ On startup, the agent checks for `config/SOUL.md`. If it doesn't exist:
 
 The agent also creates `config/`, `memory/`, and `runtime/` directories on first run if they don't exist.
 
-**Cron firings are suppressed while bootstrap is incomplete.** If a cron job's scheduled time arrives before `config/SOUL.md` exists, the scheduler skips that firing — otherwise the agent would respond with the bootstrap intro ("what should I be called?") to a heartbeat or dream prompt, polluting the cron log and confusing the user. Self-healing: the next firing after `config/SOUL.md` lands works normally.
+**Cron firings are suppressed while first-run setup is incomplete.** If a cron job's scheduled time arrives before `config/SOUL.md` exists, the scheduler skips that firing — otherwise the agent would respond with the first-run intro ("what should I be called?") to a heartbeat or dream prompt, polluting the cron log and confusing the user. Self-healing: the next firing after `config/SOUL.md` lands works normally.
 
 ## Startup flow
 
@@ -595,13 +595,13 @@ Channels and tools are **code** — they live in `agent/src/`, which is the user
 
 The asymmetry is intentional:
 
-- **Code lives in `agent/` because `agent/` is the user's repo.** Built-in channels (generated from spec recipes during bootstrap) and custom channels (added by the user) live in the same directory. There's no need for a separate "user extension" location because the user already owns `agent/`.
+- **Code lives in `agent/` because `agent/` is the user's repo.** Built-in channels (generated from spec recipes during build) and custom channels (added by the user) live in the same directory. There's no need for a separate "user extension" location because the user already owns `agent/`.
 - **Skills and cron live partly in `spec/` because they're behavior the spec ships with defaults for** (e.g., the heartbeat job, the `self-edit` skill). A user can override a default by dropping a same-named file in `config/`. No code means no node_modules or compilation — pure markdown layering.
 
 Rules:
 
 - **Filename = capability name.** No central registry. The loader scans the directory for `*.ts` files (channels, tools) or `*.md` files (cron, skills, with `config/skills/` additionally accepting `{name}/SKILL.md` for off-the-shelf agentskills.io drops) and registers each one.
-- **Recipes describe; implementations execute.** A recipe in `spec/channels/telegram.md` tells the bootstrap how to build `agent/src/channels/telegram.ts`. Recipes never name the implementation path explicitly — the path is determined by their own location.
+- **Recipes describe; implementations execute.** A recipe in `spec/channels/telegram.md` tells the build how to generate `agent/src/channels/telegram.ts`. Recipes never name the implementation path explicitly — the path is determined by their own location.
 - **Custom channels don't need spec recipes.** A user adding a channel directly to `agent/src/channels/` can colocate the optional `.md` alongside it, or skip the recipe entirely.
 
 ### Adding a channel
@@ -614,13 +614,13 @@ A channel's `.ts` file exports a `register` function that takes the router and r
 2. If not, returns nothing
 3. If yes, connects, starts forwarding owner messages to the router (ignoring all others), and returns
 
-To add a channel: write `agent/src/channels/{name}.ts`. If it's reusable, also write a recipe at `spec/channels/{name}.md` so future users can bootstrap it.
+To add a channel: write `agent/src/channels/{name}.ts`. If it's reusable, also write a recipe at `spec/channels/{name}.md` so future users can build it.
 
 ### Applying spec updates
 
-**Re-bootstrap is not idempotent.** Bootstrap is a one-time operation that initializes `agent/`. When the spec updates and you want the changes in your existing `agent/`, point a coding agent at the updated spec and ask it to apply the delta: "Here's my current `agent/`, here's the updated `spec/`. Update the code to match the new spec, preserving my custom additions."
+**Re-running build is not idempotent.** Build is a one-time operation that initializes `agent/`. When the spec updates and you want the changes in your existing `agent/`, point a coding agent at the updated spec and ask it to apply the delta: "Here's my current `agent/`, here's the updated `spec/`. Update the code to match the new spec, preserving my custom additions."
 
-This keeps the bootstrap simple (no manifest tracking, no merge logic) and makes spec updates explicit — you see the diff, you approve the changes.
+This keeps the build simple (no manifest tracking, no merge logic) and makes spec updates explicit — you see the diff, you approve the changes.
 
 ## Permissions model
 
@@ -653,7 +653,7 @@ Why `agent/` matters most: self-edit depends on it. If `agent/` is a Git repo, t
 **Setup** (run once, from inside each directory):
 
 ```bash
-cd agent && git init && git add -A && git commit -m "bootstrap"
+cd agent && git init && git add -A && git commit -m "build"
 cd config && git init && git add -A && git commit -m "initial config"
 cd memory && git init  # commits happen as the agent learns
 ```

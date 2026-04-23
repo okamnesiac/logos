@@ -4,7 +4,7 @@ For the `test` command — generate or refresh tests in `agent/test/` that verif
 
 ## Hard rule: only `test` touches `agent/test/`
 
-`bootstrap` and `update` never read, write, run, or even mention tests — even if tests already exist. The user explicitly invokes `test` after `update` (or whenever else) to refresh the suite. This keeps the cost of tests visible: someone who tried `test` once and moved on doesn't pay for test maintenance on every spec sync.
+`build` and `update` never read, write, run, or even mention tests — even if tests already exist. The user explicitly invokes `test` after `update` (or whenever else) to refresh the suite. This keeps the cost of tests visible: someone who tried `test` once and moved on doesn't pay for test maintenance on every spec sync.
 
 ## Framework
 

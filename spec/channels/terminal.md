@@ -18,7 +18,7 @@ Node standard library only — `node:net`, `node:fs/promises`, `node:fs`, `node:
 
 ## Setup
 
-Zero setup. The channel is always generated during bootstrap. Start the daemon with `agent/protos start`, then connect with `agent/protos chat` from another terminal (or the same one, after backgrounding).
+Zero setup. The channel is always generated during build. Start the daemon with `agent/protos start`, then connect with `agent/protos chat` from another terminal (or the same one, after backgrounding).
 
 ## Client-server protocol
 
