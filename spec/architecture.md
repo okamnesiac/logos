@@ -217,13 +217,25 @@ reasoning:
   provider: openai
   model: gpt-5
   api_key: $OPENAI_API_KEY
+local:
+  provider: openai-compatible
+  base_url: http://localhost:11434/v1
+  model: llama3.1
 ```
 
 **Pointers and inline definitions.** Every top-level entry is either a full profile (an object) or a pointer (a string naming another entry). `default` and `subagent` are conventional names — `default` is the fallback choice when nothing more specific is requested; `subagent` is the default for `delegate_task`. Either may be defined inline or as a pointer.
 
+**Providers.** Three provider values are supported:
+
+- `anthropic` — Anthropic's API (`@ai-sdk/anthropic`). Requires `api_key:`.
+- `openai` — OpenAI's API (`@ai-sdk/openai`). Requires `api_key:`.
+- `openai-compatible` — any OpenAI-compatible HTTP endpoint (Ollama, LM Studio, llama.cpp server, vLLM, …) via `@ai-sdk/openai-compatible`. Requires `base_url:`; `api_key:` is optional — most local servers ignore auth, but may be set for authenticated proxies.
+
+Tool-use support varies across local models; if an `openai-compatible` profile struggles with tool calling, route the specific calls that need it (via channel/cron `model:` or `delegate_task` `model:`) to a cloud profile and keep local for simpler text tasks.
+
 **Env-var substitution.** Any string field accepts `$NAME` as a whole-string value; the loader replaces it with `process.env.NAME`. Missing env vars error at load, naming the file path and variable. This lets users who want to commit `models.yaml` keep credentials in `.env`; users who don't mind can inline values.
 
-**Fallback.** A profile's `fallback:` names another profile. When a call against a profile errors with a credit-exhausted, rate-limit, or provider 5xx error, the runtime retries the same call against the fallback. **Auth errors do NOT fall back** — they're config bugs and silent fallback hides them. One hop only; cycles detected at load.
+**Fallback.** A profile's `fallback:` names another profile. When a call against a profile errors with a credit-exhausted, rate-limit, provider 5xx, or connection error (ECONNREFUSED, timeout), the runtime retries the same call against the fallback. Connection errors are included so a "local-first, cloud-as-backup" setup — an `openai-compatible` default with a cloud profile as its `fallback:` — works when the local server is down. **Auth errors do NOT fall back** — they're config bugs and silent fallback hides them. One hop only; cycles detected at load.
 
 **Selection precedence.**
 
@@ -233,7 +245,7 @@ reasoning:
 
 **Hints vs. directives.** Channel `model:`, cron `model:`, explicit `delegate_task` `model:`, and profile `fallback:` are **directives** — an unknown profile errors (at load for static references, at call time for dynamic). Skill `preferred_model:` is a **hint** — if the named profile doesn't exist, the preference is silently skipped and resolution continues (next skill's preference, else `subagent`). This lets skills ship with reasonable preferences without forcing every user to define a matching profile.
 
-**Validation at load.** The loader validates every profile resolves (no unknown pointers, no cycles), every resolved profile has provider + model + api_key after env substitution, and every directive reference (channel `model:` in `channels.yaml`, cron `model:` in merged frontmatter, profile `fallback:`) points at an existing profile. Skill `preferred_model:` is a hint and is NOT validated at load. Today "load" = startup; validation failures exit the process non-zero with a message naming the file and the offending reference. If reload is added later, the same validation runs each time.
+**Validation at load.** The loader validates every profile resolves (no unknown pointers, no cycles); every resolved profile has a valid provider + model after env substitution, with credentials as required by the provider (`api_key:` for `anthropic`/`openai`; `base_url:` for `openai-compatible`, with `api_key:` optional); and every directive reference (channel `model:` in `channels.yaml`, cron `model:` in merged frontmatter, profile `fallback:`) points at an existing profile. Skill `preferred_model:` is a hint and is NOT validated at load. Today "load" = startup; validation failures exit the process non-zero with a message naming the file and the offending reference. If reload is added later, the same validation runs each time.
 
 **Temperature** is a per-profile field. Other knobs (max tokens, thinking budget, …) can be added later — keep the schema minimal until there's demand.
 
