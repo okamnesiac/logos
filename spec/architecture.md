@@ -355,16 +355,17 @@ One JSONL file per conversation, at `runtime/threads/{channelId}/{conversationId
 
 ```ts
 type Event =
-  | { role: "user", text: string, turn_id: string, timestamp: string }
+  | { role: "user", text: string, attachments?: Attachment[], turn_id: string, timestamp: string }
   | { role: "assistant", text: string, tool_calls?: ToolCall[], turn_id: string, timestamp: string }
   | { role: "tool", tool_call_id: string, result: unknown, turn_id: string, timestamp: string }
   | { role: "audit", type: "cron_start", job: string, schedule: string, turn_id: string, timestamp: string }
   | { role: "audit", type: "cron_end", reply: string, duration_ms: number, turn_id: string, timestamp: string }
 
 type ToolCall = { id: string, tool: string, args: unknown }
+type Attachment = { type: "image", path: string, media_type: string }
 ```
 
-Snake_case throughout the wire format. Tool calls are bundled with the assistant message they were part of via a flat `tool_calls` field (mirroring AI SDK and Anthropic API conventions). Tool results are separate events with `role: "tool"`. The optional `sub_agent_log` field on a tool result points to a nested log file; see [Sub-agents](#sub-agents).
+Snake_case throughout the wire format. Tool calls are bundled with the assistant message they were part of via a flat `tool_calls` field (mirroring AI SDK and Anthropic API conventions). Tool results are separate events with `role: "tool"`. The optional `sub_agent_log` field on a tool result points to a nested log file; see [Sub-agents](#sub-agents). The optional `attachments` field on user events points to media blobs in `runtime/blobs/`; see [Attachments](#attachments-runtimeblobs).
 
 `role: "audit"` is distinct from AI SDK's `role: "system"` — LLM-oriented roles (`user`, `assistant`, `tool`) feed the context reconstruction; `audit` events exist only for human/operator record-keeping and are skipped by `buildLlmMessages`. `assistant.text` may be an empty string when a step produced only tool calls; the render filter skips such events when searching for the last assistant text of a turn.
 
@@ -380,12 +381,20 @@ When the agent runs, the router reads the JSONL and reconstructs a `CoreMessage[
 
 **Send-time annotations on user messages.** During reconstruction, every user event's `text` is prefixed with a `[sent YYYY-MM-DD HH:MM:SS ZZZ]` marker derived from its `timestamp` field, formatted in the owner's local timezone. Get the timezone from `Intl.DateTimeFormat().resolvedOptions().timeZone` and format the zone as a short abbreviation (e.g. `PDT`, `EST`, `UTC`). This gives the model a "when" for every user message, and because the latest user message is at the end of the prompt, that message's timestamp also serves as the model's "now" for any duration calculations the user asks about ("how long since I said X?"). Assistant events are NOT prefixed — the model can infer its own timing from the bounding user messages, and the asymmetric format discourages the model from mimicking the prefix in its own replies.
 
+**Attachments on user messages.** If a user event has `attachments`, the reconstructed CoreMessage becomes a content-parts array: the `[sent …]`-prefixed text as the first text part, followed by one image part per attachment (loaded from its `path`). Events without attachments stay as plain string content. The AI SDK accepts both shapes per message.
+
 #### Append cadence and writers
 
 - **Append-only writes.** The router serializes per-conversation, so there's never a concurrent writer on the same file.
 - Each event is appended as it happens (user message → user event; assistant step → assistant event; tool call → tool event). One agent invocation typically appends multiple events.
 - **Reads** load the whole file and parse it line-by-line; for a personal assistant this is fine even across years of conversation.
 - **Backup** is just copying the directory.
+
+### Attachments (`runtime/blobs/`)
+
+Inbound media (images today; audio and documents stay as placeholders for v1) is stored as content-addressed blobs at `runtime/blobs/{sha256}.{ext}`. Thread events reference blobs by workspace-relative path in their `attachments` field; content addressing deduplicates repeat-sent media automatically.
+
+The channel adapter is responsible for downloading bytes, hashing them, writing under `runtime/blobs/`, and attaching `{ type, path, media_type }` to the dispatched message. Channels without attachment support never touch this directory. Blobs are kept indefinitely — small, useful for replay, and cheap.
 
 ### Cron logs (`runtime/logs/cron/`)
 
@@ -635,6 +644,7 @@ runtime/
       12345.jsonl
     terminal/
       cli.jsonl       # persistent CLI chat thread
+  blobs/              # content-addressed media (sha256-named) referenced by thread events
   clients/            # per-client cursor files
     chat.cursor       # default terminal client
   logs/
