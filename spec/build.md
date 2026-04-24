@@ -18,7 +18,7 @@ Don't worry about the assistant's name or personality — those are configured o
 ## Key packages
 
 - `ai` — **Vercel AI SDK**. Use the latest version. Provides `generateText` with built-in tool execution. Limit the number of tool-use steps to prevent runaway loops. Do not manually implement a tool loop.
-- `@ai-sdk/anthropic` and `@ai-sdk/openai` — AI SDK providers, both installed by default so users can mix Claude and GPT profiles in `config/models.yaml` without extra installs. Other providers (`@ai-sdk/google`, etc.) can be added as needed.
+- `@ai-sdk/anthropic`, `@ai-sdk/openai`, and `@ai-sdk/openai-compatible` — AI SDK providers. All three installed by default so users can mix Claude, GPT, and local/OpenAI-compatible endpoints (Ollama, LM Studio, llama.cpp server, vLLM) in `config/models.yaml` without extra installs. Other providers (`@ai-sdk/google`, etc.) can be added as needed. Use `@ai-sdk/openai-compatible` — not `@ai-sdk/openai` with a custom `baseURL` — for non-OpenAI endpoints: the compat package skips OpenAI-specific request fields that some local servers reject, and avoids model-id prefix-routing that can misfire on `llama3.1` / `mistral-nemo` / etc.
 - `js-yaml` — YAML parsing for cron frontmatter and skill frontmatter
 - `node-cron` — cron expression scheduling
 - `tsx` — TypeScript execution without a compile step. The agent can modify its own source and restart to apply changes.
@@ -33,7 +33,7 @@ Per-instance configuration lives in three files under `config/`. See `architectu
 
 ### `config/models.yaml`
 
-LLM profiles. At minimum, a `default` profile must resolve to a concrete provider + model + api_key for the agent to start.
+LLM profiles. At minimum, a `default` profile must resolve to a concrete provider + model, plus credentials as required by the provider (`api_key:` for the hosted `anthropic`/`openai` providers, or `base_url:` for `openai-compatible`).
 
 ```yaml
 default:
@@ -42,7 +42,7 @@ default:
   api_key: $ANTHROPIC_API_KEY
 ```
 
-Put a current Claude Sonnet model ID in the template. Don't try to pin a specific version across builds — model names change frequently. `provider:` is always required — no inference from model ID.
+Put a current Claude Sonnet model ID in the template. Don't try to pin a specific version across builds — model names change frequently. `provider:` is always required — no inference from model ID. See `architecture.md` → Model selection → Providers for the full list of supported provider values (including `openai-compatible` for local endpoints like Ollama or LM Studio).
 
 ### `config/channels.yaml`
 
