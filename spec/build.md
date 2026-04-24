@@ -285,9 +285,12 @@ The entry point (`agent/src/index.ts`):
 
 1. Loads `config/.env`
 2. Ensures `runtime/` exists
-3. Registers channels
-4. Starts the scheduler
-5. Logs that it's running
+3. Loads + validates `config/models.yaml` (see `architecture.md` → Model selection → Validation at load)
+4. Loads + validates `config/channels.yaml` and registers channels
+5. Starts the scheduler
+6. Logs that it's running
+
+On any config-load failure (missing file, invalid YAML, unresolved pointer, missing `$NAME` env var, missing directive reference), the process exits non-zero with a clear error message to stdout/stderr. The bash wrapper can't reasonably replicate this validation (YAML parsing, pointer resolution, env substitution), so it relies on a post-start health check (step 9) to surface early-exit failures by tailing the log.
 
 That's it. No HTTP server needed unless a channel requires a webhook.
 
@@ -296,7 +299,7 @@ That's it. No HTTP server needed unless a channel requires a webhook.
 Create a bash script at `agent/protos` that supports:
 
 - `agent/protos` (no args) — print a usage message listing the subcommands and exit.
-- `agent/protos start` — start the process in the background. Before launching, validate that `config/models.yaml` exists and its `default` profile resolves to a concrete provider + model + api_key (after `$NAME` substitution), and that `config/channels.yaml` exists with a `primary:` entry whose credentials are all present. On any failure, print a clear error naming the file and the offending field or env var, then exit non-zero without starting. The check lives in the wrapper so errors surface directly in the user's terminal — the daemon is backgrounded and its stderr only reaches the log file.
+- `agent/protos start` — start the process in the background, then run the post-start health check (same shape as restart's, below): wait ~5s, check if the PID is still alive; if dead, print the last ~30 lines of the current log file and exit non-zero. The Node process validates its config at startup and exits with a clear error on failure (see step 8), so a fast early exit almost always means a config error — the tailed log will show it directly.
 - `agent/protos stop` — stop it
 - `agent/protos restart` — restart it (with safe-restart protocol below)
 - `agent/protos status` — check if it's running
