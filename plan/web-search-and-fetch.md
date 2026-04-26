@@ -6,7 +6,7 @@ Lands after the [agent-sdk migration](./agent-sdk-migration.md).
 
 ## Why
 
-- Vercel-backed profiles have no `webSearch` impl today (silent no-op) and a JS-bad `webFetch` (basic node fetch + html2md). OpenAI Agents has a JS-bad `webFetch` too.
+- Vercel-backed profiles have no `webSearch` impl today (silent no-op) and a JS-bad `webFetch` (basic node fetch + html2md). `openai` has a JS-bad `webFetch` too.
 - **Tavily** is purpose-built for AI agents: search returns clean LLM-friendly snippets plus an optional synthesized `answer`; extract renders JS server-side and returns cleaned content. Result quality is consistently better than Brave's raw SERP + custom extraction in early evaluation.
 - One vendor for both gaps means one API key, one rate-limit budget, no browser binary, no extraction code to maintain.
 - Privacy tradeoff: Tavily is an aggregator (your query also reaches the underlying engines via Tavily's account), and it's an AI-tooling vendor whose default incentive favors retention. Brave + self-hosted Playwright was the privacy-maximal alternative — declined for v1 because result quality ranked above the incremental privacy gain.
@@ -17,10 +17,10 @@ Lands after the [agent-sdk migration](./agent-sdk-migration.md).
 |---|---|---|
 | `claude` | native (Anthropic hosted) — untouched | native (Anthropic hosted) — untouched |
 | `codex` | native — untouched | native — untouched |
-| `openai-agents` | native (`web_search` hosted) — untouched | **override** with Tavily Extract |
+| `openai` | native (`web_search` hosted) — untouched | **override** with Tavily Extract |
 | `vercel` | **add** Tavily Search (no current default) | **override** with Tavily Extract |
 
-Wired via a single `withImpls({ webSearch: tavilySearchExecute, webFetch: tavilyExtractExecute })` call. Backends that prefer native markers (Claude/Codex everywhere; OpenAI Agents for `webSearch`) ignore the execute; Vercel and OpenAI Agents `webFetch` fall through to it.
+Wired via a single `withImpls({ webSearch: tavilySearchExecute, webFetch: tavilyExtractExecute })` call. Backends that prefer native markers (Claude/Codex everywhere; `openai` for `webSearch`) ignore the execute; Vercel and `openai` `webFetch` fall through to it.
 
 ## Tavily Search
 

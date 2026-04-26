@@ -6,7 +6,7 @@ Migrate the protos agent runtime from direct Vercel AI SDK calls to [`agent-sdk`
 
 - **Subscription billing** via Pro/Max OAuth (`CLAUDE_CODE_OAUTH_TOKEN`) and ChatGPT OAuth (`~/.codex/auth.json`) — much better personal-use cost story than metered API.
 - **Native tool integration** on Claude/Codex — sandboxed `Bash`, tuned `Read`/`Write`/`Edit`/`apply_patch`, native `Task`/`TodoWrite`.
-- **OpenAI hosted tools** via the OpenAI Agents backend — `web_search`, `code_interpreter`, `image_generation`, `file_search`, `computer_use`, plus built-in tracing.
+- **OpenAI hosted tools** via the `openai` backend — `web_search`, `code_interpreter`, `image_generation`, `file_search`, `computer_use`, plus built-in tracing.
 - **Local models** stay supported via the Vercel backend with `@ai-sdk/openai-compatible`.
 - **Backend portability** falls out for free.
 
@@ -20,12 +20,12 @@ Migrate the protos agent runtime from direct Vercel AI SDK calls to [`agent-sdk`
 
 ## 1. Backends
 
-agent-sdk supports four: `claude`, `codex`, `openai-agents`, `vercel`. Each `models.yaml` profile names one.
+agent-sdk supports four: `claude`, `codex`, `openai`, `vercel`. Each `models.yaml` profile names one.
 
-`codex` and `openai-agents` both target OpenAI models but are not interchangeable:
+`codex` and `openai` both target OpenAI models but are not interchangeable:
 
 - **`codex`** — wraps `codex app-server`. Supports the ChatGPT subscription via `codex login` (`~/.codex/auth.json`) or `OPENAI_API_KEY`.
-- **`openai-agents`** — wraps `@openai/agents`. API-key only (`OPENAI_API_KEY`). Pulls in OpenAI's hosted tools (`web_search`, `code_interpreter`, `image_generation`, `file_search`, `computer_use`) and built-in tracing.
+- **`openai`** — wraps `@openai/agents`. API-key only (`OPENAI_API_KEY`). Pulls in OpenAI's hosted tools (`web_search`, `code_interpreter`, `image_generation`, `file_search`, `computer_use`) and built-in tracing.
 
 ### `models.yaml` schema
 
@@ -46,7 +46,7 @@ reasoning:
   model: gpt-5
 
 hosted-tools:
-  backend: openai-agents
+  backend: openai
   model: gpt-5
 
 local:
@@ -64,7 +64,7 @@ backup-via-api:
 subagent: fast
 ```
 
-| Field | `claude` | `codex` | `openai-agents` | `vercel` |
+| Field | `claude` | `codex` | `openai` | `vercel` |
 |---|---|---|---|---|
 | `backend` | required | required | required | optional (default) |
 | `model` | required | required | required | required |
@@ -86,10 +86,10 @@ Per-process per backend, env-based. agent-sdk passes through whatever the backen
 | Claude (API) | `ANTHROPIC_API_KEY` env |
 | Codex (OAuth) | `~/.codex/auth.json` (run `codex login` once) |
 | Codex (API) | `OPENAI_API_KEY` env |
-| OpenAI Agents | `OPENAI_API_KEY` env (no OAuth path) |
+| `openai` | `OPENAI_API_KEY` env (no OAuth path) |
 | Vercel | per-profile `api_key` in `models.yaml` |
 
-Per-process caveat: two Claude profiles in one daemon share `CLAUDE_CODE_OAUTH_TOKEN` (same for Codex; same `OPENAI_API_KEY` shared by Codex API mode and OpenAI Agents). Per-profile API keys work only on Vercel. Fine for protos's single-user model; document.
+Per-process caveat: two Claude profiles in one daemon share `CLAUDE_CODE_OAUTH_TOKEN` (same for Codex; same `OPENAI_API_KEY` shared by Codex API mode and `openai`). Per-profile API keys work only on Vercel. Fine for protos's single-user model; document.
 
 ### Fallback
 
@@ -105,16 +105,16 @@ Native-first. Verified the Vercel backend has `withImpls` defaults for `bash`, `
 
 | Tool | Source | Notes |
 |---|---|---|
-| `bash` | canonical | Native on Claude/Codex (sandboxed). Vercel/OpenAI Agents impl bundled. |
-| `read` | canonical | Native on Claude/Codex. Vercel/OpenAI Agents impl bundled. |
-| `write` | canonical | Native on Claude/Codex. Vercel/OpenAI Agents impl bundled. |
-| `edit` | canonical | Native (Claude `Edit`, Codex `apply_patch`). Vercel/OpenAI Agents impl bundled. |
-| `glob` | canonical | Native on Claude. Codex via shell. Vercel/OpenAI Agents impl bundled. |
-| `grep` | canonical | Native on Claude. Codex via shell. Vercel/OpenAI Agents impl bundled. |
-| `webFetch` | canonical | Native on Claude/Codex. Vercel/OpenAI Agents impl bundled. Privacy story shifts; document in recipe. |
-| `webSearch` | canonical | Native on Claude/Codex/OpenAI Agents (hosted `web_search`). **Skipped on Vercel** (no `withImpls` provider) — silent no-op. |
-| `todo` | canonical | Native on Claude (`TodoWrite`), Codex (`plan`); Vercel and OpenAI Agents special-case via in-process state + system-prompt re-injection. |
-| `task` | canonical | Native (Claude `Task`, Codex `collabAgentToolCall`); Vercel and OpenAI Agents special-case via SDK sub-agent (`Agent.asTool` on OpenAI Agents). **Kept alongside `delegate_task`** (see below). |
+| `bash` | canonical | Native on Claude/Codex (sandboxed). Vercel/`openai` impl bundled. |
+| `read` | canonical | Native on Claude/Codex. Vercel/`openai` impl bundled. |
+| `write` | canonical | Native on Claude/Codex. Vercel/`openai` impl bundled. |
+| `edit` | canonical | Native (Claude `Edit`, Codex `apply_patch`). Vercel/`openai` impl bundled. |
+| `glob` | canonical | Native on Claude. Codex via shell. Vercel/`openai` impl bundled. |
+| `grep` | canonical | Native on Claude. Codex via shell. Vercel/`openai` impl bundled. |
+| `webFetch` | canonical | Native on Claude/Codex. Vercel/`openai` impl bundled. Privacy story shifts; document in recipe. |
+| `webSearch` | canonical | Native on Claude/Codex/`openai` (hosted `web_search`). **Skipped on Vercel** (no `withImpls` provider) — silent no-op. |
+| `todo` | canonical | Native on Claude (`TodoWrite`), Codex (`plan`); Vercel and `openai` special-case via in-process state + system-prompt re-injection. |
+| `task` | canonical | Native (Claude `Task`, Codex `collabAgentToolCall`); Vercel and `openai` special-case via SDK sub-agent (`Agent.asTool` on `openai`). **Kept alongside `delegate_task`** (see below). |
 | `find_memory` | custom | No native equivalent. |
 | `add_memory` | custom | Memory-aware create + shadow-resolution preservation. |
 | `rename_memory` | custom | Memory-aware rename + link rewriting. |
@@ -148,11 +148,11 @@ Convention only. The `paths.ts` wrapper layer was load-bearing because we owned 
 
 System prompt reinforces convention. `PROTOS_SELF_EDIT` env var goes away — replaced by the chmod recommendation.
 
-### `withImpls` for Vercel / OpenAI Agents
+### `withImpls` for Vercel / `openai`
 
 For v1, use the agent-sdk bundled defaults on both backends. Re-add custom impls only if a default proves inadequate (e.g. our existing `web_fetch` privacy/backend-choice gives way to the canonical for now; documented in the recipe; reinstate via `withImpls` later if it bites).
 
-`webSearch` already routes natively on OpenAI Agents (hosted `web_search`); only Vercel still lacks a default provider.
+`webSearch` already routes natively on `openai` (hosted `web_search`); only Vercel still lacks a default provider.
 
 ---
 
@@ -226,10 +226,10 @@ Our threads JSONL is durable / canonical. The runtime's session record is opaque
 |---|---|---|
 | `claude` | `~/.claude/projects/.../{session-id}.jsonl` (Claude SDK's storage) | Same |
 | `codex` | `~/.codex/sessions/...` + sqlite | Same |
-| `openai-agents` | `runtime/sessions/openai-agents/{continuation}.jsonl` (`AgentInputItem` lines) | Appends `AgentInputItem` rows |
+| `openai` | `runtime/sessions/openai/{continuation}.jsonl` (`AgentInputItem` lines) | Appends `AgentInputItem` rows |
 | `vercel` | `runtime/sessions/vercel/{continuation}.jsonl` (UIMessage) | Appends UIMessage rows |
 
-Across all backends, we tee from `query.events` to our `{profile}.jsonl`. The SDK's session storage is never read or written by protos directly. For `openai-agents`, we configure `sessionsDir: runtime/sessions/openai-agents/` (not the default no-persistence mode, and not `useConversations` — the latter is mutually exclusive with `autoCompact`).
+Across all backends, we tee from `query.events` to our `{profile}.jsonl`. The SDK's session storage is never read or written by protos directly. For `openai`, we configure `sessionsDir: runtime/sessions/openai/` (not the default no-persistence mode, and not `useConversations` — the latter is mutually exclusive with `autoCompact`).
 
 ### Image events in the gap
 
@@ -247,7 +247,7 @@ All four backends auto-compact natively:
 
 - **Claude / Codex** — built into the upstream SDKs.
 - **Vercel** — agent-sdk runs hysteresis-based compaction (`autoCompact` defaults to `true`; tunable via `contextThreshold`, `compactionModel`, `keepLastTurns`, `contextWindow`).
-- **OpenAI Agents** — agent-sdk wraps the Session in `OpenAIResponsesCompactionSession` (also `autoCompact: true` by default).
+- **`openai`** — agent-sdk wraps the Session in `OpenAIResponsesCompactionSession` (also `autoCompact: true` by default).
 
 protos sets explicit `contextWindow` per Vercel profile when the model isn't in agent-sdk's `MODEL_CONTEXT_WINDOWS` table — otherwise compaction silently disables for that profile. The other knobs can stay at defaults until tuning is needed.
 
@@ -267,7 +267,7 @@ The recap mechanism handles "stuff that happened on other profiles in this conve
 
 Both former blockers shipped:
 
-- **Vercel auto-compaction** — landed (commit `a56b383`). Hysteresis-based; on by default with tunable `contextThreshold` / `compactionModel` / `keepLastTurns` / `contextWindow`. Parity with Claude/Codex/OpenAI Agents.
+- **Vercel auto-compaction** — landed (commit `a56b383`). Hysteresis-based; on by default with tunable `contextThreshold` / `compactionModel` / `keepLastTurns` / `contextWindow`. Parity with Claude/Codex/`openai`.
 - **Image support in `QueryInput`** — landed (commit `39406df`). `QueryInput.attachments?: Attachment[]` accepted on all four backends; image sources can be `url`, `base64`, or local `path`.
 
 No upstream blockers remain for the migration. All four backends support attachments and auto-compact; both early caveats (Vercel-only images, manual Vercel thread pruning) are gone.
@@ -277,17 +277,17 @@ No upstream blockers remain for the migration. All four backends support attachm
 ## Open questions (deferred)
 
 1. **Gap recap summarization** — verbatim last-10 for v1. Switch to LLM-summarized if conversations get gappy enough that the verbatim version eats too much context.
-2. **`webSearch` on Vercel** — skipped for now (native on Claude/Codex/OpenAI Agents). Add a `withImpls` provider (Brave, Tavily, etc.) when someone wants it.
-3. **`webFetch` privacy** — bundled defaults for v1 on Vercel and OpenAI Agents. Reinstate our `PROTOS_WEB_FETCH_BACKEND` privacy controls via `withImpls` if it bites.
-4. **Per-profile auth on Claude/Codex/OpenAI Agents** — out of scope; single-user assumption holds. Note that Codex API mode and OpenAI Agents share `OPENAI_API_KEY`.
-5. **OpenAI Agents tracing** — auto-traces to OpenAI's tracing dashboard when this backend runs. No protos action; document where traces appear.
+2. **`webSearch` on Vercel** — skipped for now (native on Claude/Codex/`openai`). Add a `withImpls` provider (Brave, Tavily, etc.) when someone wants it.
+3. **`webFetch` privacy** — bundled defaults for v1 on Vercel and `openai`. Reinstate our `PROTOS_WEB_FETCH_BACKEND` privacy controls via `withImpls` if it bites.
+4. **Per-profile auth on Claude/Codex/`openai`** — out of scope; single-user assumption holds. Note that Codex API mode and `openai` share `OPENAI_API_KEY`.
+5. **`openai` tracing** — auto-traces to OpenAI's tracing dashboard when this backend runs. No protos action; document where traces appear.
 6. **Existing pre-migration thread history** — on first dispatch after migration, treat as case 3 (fresh session with full recap from existing threads JSONL). No conversion step needed; the gap mechanism handles it.
 
 ---
 
 ## Spec edit scope (for the eventual PR)
 
-- `spec/architecture.md`: tech stack row, Agent section opener, Tools list rewrite, Sub-agents section (task + delegate_task complement), Storage section (per-profile thread paths + `runtime/sessions/{vercel,openai-agents}/`), new Backends subsection in Model selection (four backends), new Session continuity subsection, Self-modification simplification, file-structure tree.
-- `spec/build.md`: Key packages, Configuration (Claude/Codex auth setup, OpenAI Agents env), step 2 (threads.ts per-profile + drop `buildLlmMessages`), step 4 (Agent runtime + drop `MAX_HISTORY`/`applyTokenGuard` + cold-start logic + Vercel `contextWindow` per profile), step 4d (sub-Agent), step 9 (drop `PROTOS_SELF_EDIT` validation; add per-backend auth-presence validation).
+- `spec/architecture.md`: tech stack row, Agent section opener, Tools list rewrite, Sub-agents section (task + delegate_task complement), Storage section (per-profile thread paths + `runtime/sessions/{vercel,openai}/`), new Backends subsection in Model selection (four backends), new Session continuity subsection, Self-modification simplification, file-structure tree.
+- `spec/build.md`: Key packages, Configuration (Claude/Codex auth setup, `openai` env), step 2 (threads.ts per-profile + drop `buildLlmMessages`), step 4 (Agent runtime + drop `MAX_HISTORY`/`applyTokenGuard` + cold-start logic + Vercel `contextWindow` per profile), step 4d (sub-Agent), step 9 (drop `PROTOS_SELF_EDIT` validation; add per-backend auth-presence validation).
 - `spec/tools/`: rename `remember.md` → `add_journal_entry.md`. Delete `shell.md`, `read_file.md`, `write_file.md`, `edit_file.md`, `web_fetch.md`. Keep `find_memory.md`, `add_memory.md`, `rename_memory.md`, `delegate_task.md`, plus the consolidation/orphan-finder recipes.
 - Channel recipes: unchanged.
