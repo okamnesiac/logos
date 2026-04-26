@@ -1,4 +1,4 @@
-# The spec repo only tracks the workspace shell + spec/.
+# The spec repo only tracks the workspace shell + spec/ + plan/.
 # agent/, config/, memory/, vendor/, runtime/ are sibling domains owned elsewhere
 # (own repos, or unmanaged folders). Whitelist what we track.
 
@@ -9,3 +9,4 @@
 !/CLAUDE.md
 !/AGENTS.md
 !/spec/
+!/plan/
