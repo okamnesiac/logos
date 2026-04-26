@@ -28,7 +28,12 @@ Only forward messages where the chat ID matches the entry's `owner_id`. Silently
 
 ## Non-text content
 
-Supports text, photos, documents, voice messages, and stickers. For non-text content, normalize to a placeholder string (e.g. `[photo]`, `[voice message]`) since the agent only handles text for now.
+Telegram delivers text, photos, documents, voice messages, and stickers.
+
+- **Photos** — fetch the highest-resolution variant via `ctx.getFile()` / `bot.api.getFile()`, hash the bytes (sha256), write to `runtime/blobs/{sha256}.{ext}` (extension derived from the file's `mime_type`), and attach as an `image` on the dispatched message. The message `text` is the photo's caption if present, empty string otherwise.
+- **Documents, voice messages, stickers** — normalize to a placeholder string (e.g. `[document: filename.pdf]`, `[voice message]`, `[sticker: 👋]`). Transcription and document parsing are out of scope for v1.
+
+See `architecture.md` → Storage → Attachments for the blob layout and event schema.
 
 ## Markdown conversion
 
