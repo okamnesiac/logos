@@ -98,6 +98,16 @@ If the user is updating from a pre-YAML deployment (where `AI_MODEL` / `ANTHROPI
 
 Reference each secret by `$NAME` rather than inlining, so the existing `.env` keeps holding the credentials. Show the user the generated YAML for review before writing; don't touch the original `.env`. The runtime does NOT read the legacy model/channel env vars — the YAML files do, via substitution.
 
+## Implementation conventions
+
+A short list of code-level rules. Each one has an anchor — a concrete failure mode it would have prevented in this codebase. Apply them across every step below.
+
+- **No `as any` or `as unknown as T` casts.** TypeScript catches structural mismatches; bypassing it lets bugs through compile and review. The fix is always a typed mapper or a structural type, never a cast. *Anchor:* the agent-sdk migration shipped with `msg.attachments as any` when handing the user's `Attachment[]` to `agent.run({ attachments })`. protos's internal shape (`{type, path, media_type}`) doesn't match agent-sdk's (`{type, source: {kind, path}}`), so the bytes never reached the model — and `tsc` would have surfaced the error if not for the cast.
+- **`?.()` on a documented method is a bug smell.** Optional chaining belongs on values that genuinely may be undefined (DOM nodes, optional fields). Calling a method that's part of a typed interface as `obj.method?.(...)` either hides a missing implementation or means the type isn't right — both deserve a real fix, not a silent skip. *Anchor:* `agent.backend.isContinuationInvalid?.(new Error(...))` in router.ts. If the SDK's Backend interface declares the method, the `?.` should be a `.`; if it doesn't, the call shouldn't be there.
+- **Bare `catch {}` and `?? null` need a one-line reason.** Silently disappearing errors is the most common way for AI-generated code to look correct while masking real failures. `catch (e) { /* ENOENT is fine — file may not yet exist */ }` is acceptable; an unexplained `catch {}` is not. Same rule for `?? null` / `?? undefined` patterns that paper over a missing case — explain *why* the fallback is correct, or pick a different shape.
+
+These rules are enforcement-by-convention, not lint rules — but `review` and `test` should flag violations of (1) and (3) when they audit `agent/`.
+
 ## Step-by-step
 
 **Note:** Default cron jobs (`spec/cron/heartbeat.md`, `spec/cron/nap.md`, `spec/cron/dream.md`) and bundled skills (`spec/skills/`) ship with the spec. The running agent reads these directly. Don't copy them into `agent/`.
