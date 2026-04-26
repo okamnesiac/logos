@@ -17,13 +17,15 @@ Don't worry about the assistant's name or personality — those are configured o
 
 ## Key packages
 
-- `ai` — **Vercel AI SDK**. Use the latest version. Provides `generateText` with built-in tool execution. Limit the number of tool-use steps to prevent runaway loops. Do not manually implement a tool loop.
-- `@ai-sdk/anthropic`, `@ai-sdk/openai`, and `@ai-sdk/openai-compatible` — AI SDK providers. All three installed by default so users can mix Claude, GPT, and local/OpenAI-compatible endpoints (Ollama, LM Studio, llama.cpp server, vLLM) in `config/models.yaml` without extra installs. Other providers (`@ai-sdk/google`, etc.) can be added as needed. Use `@ai-sdk/openai-compatible` — not `@ai-sdk/openai` with a custom `baseURL` — for non-OpenAI endpoints: the compat package skips OpenAI-specific request fields that some local servers reject, and avoids model-id prefix-routing that can misfire on `llama3.1` / `mistral-nemo` / etc.
+- `agent-sdk` — **agent-sdk** ([github.com/ExProtos/agent-sdk](https://github.com/ExProtos/agent-sdk)). One API over four runtimes (Claude Agent SDK, Codex AppServer, OpenAI Agents SDK, Vercel AI SDK). Provides `Agent`, `agent.run()`, the canonical tool catalog (`bash`, `read`, `write`, `edit`, `glob`, `grep`, `webFetch`, `webSearch`, `todo`, `task`), and `withImpls()` for plugging in-process executors on backends that consult `execute`. agent-sdk handles the tool execution loop, automatic compaction, and per-backend session storage; do not implement a tool loop or token guard.
+  - **Not on npm yet.** Install via the GitHub URL: `npm install github:ExProtos/agent-sdk` (npm clones the repo and runs the upstream `prepare` script to build `dist/` automatically). The resulting `agent/package.json` entry will look like `"agent-sdk": "github:ExProtos/agent-sdk"`. Pin to a specific SHA or tag (`github:ExProtos/agent-sdk#abc1234`) once a stable release exists.
 - `js-yaml` — YAML parsing for cron frontmatter and skill frontmatter
 - `node-cron` — cron expression scheduling
 - `tsx` — TypeScript execution without a compile step. The agent can modify its own source and restart to apply changes.
-- `zod` — schema validation, required by the AI SDK for tool parameter definitions
+- `zod` — schema validation, used by agent-sdk for tool parameter definitions
 - Channel-specific libraries — see the chosen recipe in `spec/channels/`
+
+agent-sdk pulls in the underlying SDKs (`@anthropic-ai/claude-agent-sdk`, the Codex app-server bridge, `@openai/agents`, `ai` + `@ai-sdk/anthropic` / `@ai-sdk/openai` / `@ai-sdk/openai-compatible`) as transitive dependencies — they install with agent-sdk. There's nothing to install separately for the four backends.
 
 **Do not use `dotenv` or `dotenvx`** to load `config/.env` — both packages print advertising lines to stdout on load (`tip: ⌁ auth for agents`…). Use Node's built-in `--env-file=config/.env` flag instead, or load the file manually (read, parse `KEY=value` lines, populate `process.env`). No noisy console output, one fewer dependency.
 
@@ -33,16 +35,24 @@ Per-instance configuration lives in three files under `config/`. See `architectu
 
 ### `config/models.yaml`
 
-LLM profiles. At minimum, a `default` profile must resolve to a concrete provider + model, plus credentials as required by the provider (`api_key:` for the hosted `anthropic`/`openai` providers, or `base_url:` for `openai-compatible`).
+LLM profiles. At minimum, a `default` profile must resolve to a concrete backend + model, with backend-specific fields and required env vars set per `architecture.md` → Model selection → Backends.
 
 ```yaml
 default:
-  provider: anthropic
+  backend: claude
   model: claude-sonnet-4-6
-  api_key: $ANTHROPIC_API_KEY
 ```
 
-Put a current Claude Sonnet model ID in the template. Don't try to pin a specific version across builds — model names change frequently. `provider:` is always required — no inference from model ID. See `architecture.md` → Model selection → Providers for the full list of supported provider values (including `openai-compatible` for local endpoints like Ollama or LM Studio).
+Put a current Claude Sonnet model ID in the template. Don't try to pin a specific version across builds — model names change frequently. `backend:` is required for `claude` / `codex` / `openai-agents`; the `vercel` backend's profile must additionally set `provider:` (`anthropic` / `openai` / `openai-compatible`) and the corresponding fields (`api_key:` for hosted; `base_url:` for openai-compatible).
+
+**Auth setup before first run.**
+
+- **`claude` backend** — run `claude setup-token` once to populate `CLAUDE_CODE_OAUTH_TOKEN` (subscription billing). Or set `ANTHROPIC_API_KEY` for metered API.
+- **`codex` backend** — run `codex login` once to populate `~/.codex/auth.json` (ChatGPT subscription). Or set `OPENAI_API_KEY` for metered API.
+- **`openai-agents` backend** — set `OPENAI_API_KEY`. No OAuth path; subscription auth requires `codex` instead.
+- **`vercel` backend** — per-profile `api_key:` in YAML (typically referenced via `$NAME` from `.env`).
+
+Document this in the user-facing setup notes the build emits.
 
 ### `config/channels.yaml`
 
@@ -61,23 +71,21 @@ terminal:
 
 ### `config/.env`
 
-Holds secrets referenced from the YAML files via `$NAME` substitution, plus the few global toggles listed below. Gitignored by the build. If the user prefers to inline credentials in the YAML files instead, `.env` may be empty or absent for secret purposes.
+Holds secrets referenced from the YAML files via `$NAME` substitution, plus the per-backend auth env vars listed below. Gitignored by the build.
 
-Global (non-per-profile) toggles that stay in `.env`:
+Per-backend env vars (only the ones for backends actually used in `models.yaml` need values):
 
-- `PROTOS_SELF_EDIT` — `true` (default) or `false`. See `architecture.md` → Self-modification.
-- `PROTOS_WEB_FETCH` — `true` (default) or `false`. When false, the `web_fetch` tool refuses every call.
-- `PROTOS_WEB_FETCH_BACKEND` — `fetch` (default), `jina`, or `playwright`. See `spec/tools/web_fetch.md` for tradeoffs.
-- `PROTOS_WEB_FETCH_TIMEOUT_MS` — optional, default `15000`.
-- `JINA_API_KEY` — optional; only consulted when backend is `jina`.
+- `CLAUDE_CODE_OAUTH_TOKEN` — populated by `claude setup-token`. Used by the `claude` backend (subscription).
+- `ANTHROPIC_API_KEY` — alternative for the `claude` backend (metered API), and required by `vercel` profiles using `provider: anthropic`.
+- `OPENAI_API_KEY` — used by the `codex` backend (metered API; OAuth lives in `~/.codex/auth.json`), the `openai-agents` backend (only auth path), and `vercel` profiles using `provider: openai`.
 
-These are global on/off toggles and backend selectors, not per-instance config — env vars are the right shape.
+Self-edit toggling and `spec/` write protection are now OS-level — see `architecture.md` → Self-modification. No `PROTOS_SELF_EDIT` env var.
 
 Channel-specific credentials (including the owner's ID on that platform) are listed in each channel recipe under `spec/channels/` as fields to put in `channels.yaml`. Tool-specific variables are listed in each tool recipe under `spec/tools/`.
 
 ### Migrating from legacy env-only deployments
 
-If the user is updating from a pre-YAML deployment (where `AI_MODEL` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `PRIMARY_CHANNEL` / per-channel env vars were read directly by the runtime), synthesize `config/models.yaml` and `config/channels.yaml` from those env vars. Reference each secret by `$NAME` rather than inlining, so the existing `.env` keeps holding the credentials. Show the user the generated YAML for review before writing; don't touch the original `.env`. The runtime does NOT read the legacy model/channel env vars — the YAML files do, via substitution.
+If the user is updating from a pre-YAML deployment (where `AI_MODEL` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `PRIMARY_CHANNEL` / per-channel env vars were read directly by the runtime), synthesize `config/models.yaml` and `config/channels.yaml` from those env vars. The synthesized `default:` profile uses `backend: vercel` plus the `provider:` field that matches the legacy AI_MODEL provider, so the migration is purely a config rewrite — no behavior change. Users can flip to `backend: claude` or `backend: codex` afterward to pick up subscription billing. Reference each secret by `$NAME` rather than inlining, so the existing `.env` keeps holding the credentials. Show the user the generated YAML for review before writing; don't touch the original `.env`. The runtime does NOT read the legacy model/channel env vars — the YAML files do, via substitution.
 
 ## Step-by-step
 
@@ -92,9 +100,9 @@ If the user is updating from a pre-YAML deployment (where `AI_MODEL` / `ANTHROPI
 - Source code goes in `agent/src/` per the file structure in `architecture.md`.
 - Use `process.cwd()` for the workspace root path, not `import.meta.dirname` — tsx runs in CJS mode where `import.meta.dirname` is undefined. The wrapper script ensures the process runs with the workspace root as cwd.
 - Create `config/` if it doesn't exist (the agent should do this on first run, but the build can pre-create it). Write three templates:
-  - `config/models.yaml` — a single `default:` profile with `provider: anthropic`, a current Claude Sonnet model ID, and `api_key: $ANTHROPIC_API_KEY`. The user can edit to pick a different model, add providers, or add more profiles.
+  - `config/models.yaml` — a single `default:` profile with `backend: claude` and a current Claude Sonnet model ID. The user runs `claude setup-token` once to populate `CLAUDE_CODE_OAUTH_TOKEN` (subscription billing). The user can edit to pick a different backend (`codex`, `openai-agents`, `vercel`), add providers, or add more profiles. Drop a comment in the template pointing at `architecture.md` → Model selection → Backends.
   - `config/channels.yaml` — `primary:` pointing at the user's chosen channel, one block for that channel with credentials referenced via `$NAME`, and a `terminal: { enabled: true }` block.
-  - `config/.env` — template containing the `$NAME` variables the YAML references (e.g. `ANTHROPIC_API_KEY=`, `TELEGRAM_BOT_TOKEN=`), blank for the user to fill in. Also include the global toggles from the Configuration section.
+  - `config/.env` — template containing the `$NAME` variables the YAML references (e.g. `TELEGRAM_BOT_TOKEN=`) plus stubs for the per-backend auth env vars from the Configuration section (`CLAUDE_CODE_OAUTH_TOKEN=`, `ANTHROPIC_API_KEY=`, `OPENAI_API_KEY=`), blank for the user to fill in.
 
 ### 1a. Initialize Git repos for agent/, config/, memory/
 
@@ -112,18 +120,23 @@ If any of these directories already has a `.git/`, leave it alone — the user i
 
 ### 2. Set up message storage
 
-Implement `agent/src/threads.ts`. Event schema, `turn_id` grouping, replay semantics, and the render filter are defined in `architecture.md` → Storage / Message history (Event schema).
+Implement `agent/src/threads.ts`. Event schema, `turn_id` grouping, the per-profile JSONL layout, the continuation sidecar, and the render filter are defined in `architecture.md` → Storage / Message history and Session continuity.
 
 Functions to export:
 
-- `appendEvent(channelId, conversationId, event)` — append one event to the conversation's JSONL (creating the directory if missing). Sanitize `channelId` and `conversationId` to safe path segments — reject anything with `/`, `..`, or other path-escape characters. Accepts any variant of the event discriminated union.
-- `readEvents(channelId, conversationId, limit?)` — read the file (return `[]` if missing), parse each non-blank line as JSON, drop malformed lines, optionally slice to the last `limit` events with **turn-boundary backward-alignment**: if the naïve cut point `P = events.length - limit` lands mid-turn (i.e. `events[P-1].turn_id === events[P].turn_id`), decrement `P` until that's no longer true, so the returned window starts at the first event of its turn. The returned window may be slightly larger than `limit` (by up to one turn), never smaller. This preserves the tool-call/tool-result pairing invariant (see `architecture.md` → Tool return shapes) — a forward-aligned slice could leave orphan tool results at the head, which the LLM SDK rejects with `Each tool_result block must have a corresponding tool_use block in the previous message`.
-- `buildLlmMessages(events)` — given an ordered event list, produce the AI SDK `CoreMessage[]` per the rules in `architecture.md` → LLM context (replay): each event becomes one `CoreMessage` in order, user events get the send-time annotation, audit events are skipped, adjacent same-role messages are collapsed. This is the **correctness fix** that lets the model see the tool calls it actually made.
-- `renderForChannel(events)` — apply the render filter: for each `turn_id`, emit user events as-is and the **last** assistant text of the turn (skipping assistant events whose `text` is empty OR equals the literal `NO_REPLY` lifecycle marker); drop intermediate assistant texts, assistant events' `tool_calls`, `role: "tool"` events, and `role: "audit"` events. Used by watch-based channels (e.g. terminal). Push-based channels don't call this.
+- `appendEvent(channelId, conversationId, profile, event)` — append one event to `runtime/threads/{channelId}/{conversationId}/{profile}.jsonl` (creating the directory if missing). Sanitize all three id segments to safe path segments — reject anything with `/`, `..`, or other path-escape characters. Accepts any variant of the event discriminated union.
+- `readMergedEvents(channelId, conversationId, limit?)` — read every `*.jsonl` file in the conversation directory, parse each non-blank line as JSON, drop malformed lines, merge by `timestamp`. Optional `limit` slices to the last N events. This is the canonical "what happened in this conversation, across profiles" view used by render filters and consolidation.
+- `readProfileEvents(channelId, conversationId, profile, limit?)` — same shape as the merged version but scoped to one profile's JSONL. Used by the gap-detection logic (we need each profile's last-event timestamp independently).
+- `readContinuation(channelId, conversationId, profile)` / `writeContinuation(...)` / `clearContinuation(...)` — read/write the `{profile}.continuation` sidecar holding the active backend session token.
+- `renderForChannel(events)` — apply the render filter to a merged event list: for each `turn_id`, emit user events as-is and the **last** assistant text of the turn (skipping assistant events whose `text` is empty OR equals the literal `NO_REPLY` lifecycle marker); drop intermediate assistant texts, assistant events' `tool_calls`, `role: "tool"` events, and `role: "audit"` events. Used by watch-based channels (e.g. terminal). Push-based channels don't call this.
 
-The router serializes per-conversation, so `appendEvent` never has a concurrent writer on the same file. No locking needed.
+There is no `buildLlmMessages` — agent-sdk owns conversation reconstruction via continuation tokens. Our threads JSONL is the durable record we control by teeing from `agent.events`; the backend's session storage handles its own model-input format.
 
-**Cron logs.** The same `appendEvent` / `readEvents` primitives work for cron logs at `runtime/logs/cron/{jobname}/{ISO}.jsonl` — expose a variant (e.g. `appendCronEvent(jobname, timestamp, event)`) that routes to the right path. Sub-agent logs work the same way at the nested paths defined in `architecture.md` → Sub-agents.
+The router serializes per-conversation, so `appendEvent` never has a concurrent writer on the same `(channelId, conversationId)` directory. No locking needed.
+
+**Tee from agent-sdk.** Wrap `agent.run({...})` and consume the returned `query.events` AsyncIterable: for every `text_end`, `tool_call_end`, and `tool_result` event, build a thread `Event` and call `appendEvent`. Capture the first `session_start.continuation` token and persist it via `writeContinuation`.
+
+**Cron logs.** The same `appendEvent` primitive can target cron log paths via a variant (`appendCronEvent(jobname, timestamp, event)`); cron logs are not per-profile (each run is a single backend invocation, so one JSONL per run is enough). Sub-agent logs are similar — one log per call, no per-profile fan-out.
 
 ### 3. Build the router
 
@@ -140,13 +153,13 @@ Implementation:
 
 ### 4. Build the agent
 
-Use the Vercel AI SDK's `generateText` for automatic tool execution. Cap the multi-step tool loop at **`stepCountIs(25)`** to prevent runaway loops. Do not manually implement a tool loop. Sub-agents inherit the same cap.
+Use agent-sdk's `Agent` + `agent.run()` for automatic tool execution. Cap each `Agent` at the SDK default (~25 turns). Do not manually implement a tool loop, manage history, or guard tokens — agent-sdk owns all three.
 
-- Build a **model resolver** from `config/models.yaml` at startup per `architecture.md` → Model selection. Expose a helper like `resolveModel({ channel?, cron?, explicit?, preferredFromSkills? })` → `{ client, profileName }` that the router/scheduler/sub-agent runner call with context and receive back a ready-to-use AI SDK client.
-- Wrap every `generateText` call through a **fallback-aware adapter**: on credit-exhausted, rate-limit, or provider 5xx errors, look up the resolved profile's `fallback:` (if any) and retry once with that profile's client. Auth and 4xx-other errors pass through — don't mask config bugs.
-- The agent receives conversation history (the current message is already the last entry). Pass it directly to the SDK as the messages array.
-- Cap conversation history at the 100 most recent events (backward-aligned to a turn boundary — see `readEvents` above) to avoid blowing past token limits. Apply the cap when retrieving history, not in the agent. 100 gives comfortable slack over `nap`'s 50-event consolidation threshold so unconsolidated events stay in the agent's working context between `nap` runs.
-- Guard against oversized prompts. Estimate tokens using a 4:1 character-to-token ratio for text content, plus **~1500 tokens per image attachment** (Anthropic and OpenAI both bill in that neighborhood for typical resolutions). Without the per-image accounting, image-heavy threads silently sail past the cap and hit the LLM with a real token spike. First, truncate any individual message over 10,000 tokens (text only — don't drop image parts mid-message). Then, if the total (system prompt + messages) exceeds 150,000 tokens, drop the oldest messages until it fits.
+- Build a **profile-to-Agent resolver** from `config/models.yaml` at startup per `architecture.md` → Model selection. Expose a helper like `agentForProfile(profileName)` → `Agent` that the router/scheduler/sub-agent runner call with the resolved profile name. Construct each profile's `Agent` once on first use and cache it (one `Agent` per profile); reuse across dispatches.
+- Wrap every `agent.run()` call through a **fallback-aware adapter**: on credit-exhausted, rate-limit, or provider 5xx, or connection errors, look up the resolved profile's `fallback:` (if any), build the fallback profile's `Agent`, and retry once with the fallback. Cross-backend fallback works — the adapter wraps `agent.run` regardless of backend. Auth and 4xx-other errors pass through. Continuation tokens are profile-scoped (per `architecture.md` → Session continuity), so a fallback retry uses the fallback profile's continuation, not the failed profile's.
+- The dispatcher reads continuation + computes any gap-recap per the five cases in `architecture.md` → Session continuity, then calls `agent.run({ message, continuation?, attachments? })`. Tee `query.events` into the appropriate `{profile}.jsonl`; persist the first `session_start.continuation` to the sidecar.
+- **No per-message history cap.** agent-sdk's per-backend auto-compaction (Claude/Codex native; Vercel and OpenAI Agents wrap their session in a compaction-aware decorator) keeps context within the model's window. Set per-profile `contextWindow:` only when the model isn't in agent-sdk's `MODEL_CONTEXT_WINDOWS` table — otherwise compaction silently disables for that profile.
+- **No per-image token guard.** PR #51's `~1500 tokens per image` accounting now lives upstream in agent-sdk's compaction math. Just pass `QueryInput.attachments` and let the backend handle it.
 
 #### System prompt assembly
 
@@ -156,36 +169,36 @@ The system prompt is concatenated from these sections, in order:
 2. **`config/SOUL.md`** (identity) — if missing, run the first-run flow (see step 4a).
 3. **Memory manifest** — see `architecture.md` → Memory format → Loading into context. Build it from the memory module's manifest output (step 4b).
 4. **Last 24 hours of `memory/journal/` entries inline** — recent agent-authored notes likely to be relevant; older journal entries appear in the manifest only.
-5. **Skills summary** — pulled from `spec/skills/*.md`, `config/skills/*.md`, and `config/skills/*/SKILL.md` frontmatter; config merges with spec on name collision (see step 4b). Each entry is formatted as `- <name> (<paths joined with " + ">) — <description>` so the agent can open the full skill body via `read_file` — for a merged skill, both source files together.
+5. **Skills summary** — pulled from `spec/skills/*.md`, `config/skills/*.md`, and `config/skills/*/SKILL.md` frontmatter; config merges with spec on name collision (see step 4b). Each entry is formatted as `- <name> (<paths joined with " + ">) — <description>` so the agent can open the full skill body via the canonical `read` tool — for a merged skill, both source files together.
 
 #### 4a. First-run flow
 
 If `config/SOUL.md` doesn't exist when the agent assembles its system prompt:
 
-- Use a minimal first-run system prompt: "You are a new personal AI assistant named Protos. You haven't been configured yet. On your next reply, introduce yourself and ask the user (1) what to call yourself and (2) how you should act — personality, tone, style. Once they answer, use `write_file` with `mode: \"create\"` to create `config/SOUL.md` with the chosen name and personality. Nothing else belongs in that file — memory, skills, and other context are loaded separately."
+- Use a minimal first-run system prompt: "You are a new personal AI assistant named Protos. You haven't been configured yet. On your next reply, introduce yourself and ask the user (1) what to call yourself and (2) how you should act — personality, tone, style. Once they answer, use the `write` tool to create `config/SOUL.md` with the chosen name and personality. Nothing else belongs in that file — memory, skills, and other context are loaded separately."
 - After the user answers, the agent writes `config/SOUL.md`. Subsequent invocations read it normally.
 - Also ensure `config/`, `memory/`, and `runtime/` directories exist; create them if not.
 
 #### Tools
 
-Implement one tool per recipe under `spec/tools/`. Each recipe is the contract for that tool — inputs, outputs, behavior, dependencies.
+The canonical tools (`bash`, `read`, `write`, `edit`, `glob`, `grep`, `webFetch`, `webSearch`, `todo`, `task`) come from agent-sdk — import from the package, no implementation needed. Each `Agent` is constructed with the canonical catalog plus the protos-specific custom tools below.
 
-Bundled tools to build (each has a recipe):
+**Custom tools** (one recipe each in `spec/tools/`):
 
-- Core file/shell: `read_file`, `write_file`, `edit_file`, `remember`, `shell`
 - Memory-aware create/find/rename (wiki-link-form input, resolution-preserving): `find_memory`, `add_memory`, `rename_memory`
-- Agent control: `delegate_task`, `web_fetch`
+- Journaling: `add_journal_entry` (sugar for appending to today's journal entry)
+- Agent control: `delegate_task` (protos's skill-aware sub-agent — see step 4d)
 - Consolidation (used by `nap`/`dream` crons): `list_threads`, `read_thread_tail`, `advance_thread_cursor`
 - Memory hygiene: `find_orphans`
 
 Implementation conventions:
 
-- **Paths helper** — share a single module (`agent/src/paths.ts`) used by every path-taking tool. The helper resolves to absolute, rejects paths escaping the workspace root, and enforces the `spec/` and `agent/` write guards (see `architecture.md` → Self-modification for what those guards are and when they apply).
-- **Memory graph cache invalidation** — any tool that writes under `memory/` (`write_file`, `edit_file`, `remember`, `add_memory`, `rename_memory`) must delete `runtime/memory-graph.json` so the next graph operation rebuilds.
+- **Memory graph cache invalidation** — any tool that writes under `memory/` (`add_memory`, `rename_memory`, `add_journal_entry`, plus the canonical `write` / `edit` when the path lands under `memory/`) must delete `runtime/memory-graph.json` so the next graph operation rebuilds. For the canonical tools, hook this via `withImpls` wrappers on `write` and `edit` that call the original execute then invalidate the cache when the path is under `memory/`. (Claude/Codex use native tools that bypass `execute` — for those backends, the cache rebuild falls back to mtime detection at next graph operation, which is sufficient.)
 - **Resolution-preservation helper** — `add_memory` and `rename_memory` share the same pre/post snapshot → rewrite-changed-resolutions algorithm. Extract it as a single helper in `agent/src/memory.ts` and call it from both tools.
-- **Tool return shapes** follow `architecture.md` → Tool return shapes. Never return bare `null` from a tool, and honor the call/result pairing invariant (error-catching adapter at registration).
+- **Tool return shapes** follow `architecture.md` → Tool return shapes. Never return bare `null` from a tool. Pairing of `tool_call_end` / `tool_result` events is owned by agent-sdk; the tee layer just records both sides.
+- **Workspace path safety** — custom tools that take user-supplied paths should resolve under the workspace root and reject path-traversal escapes. There's no shared paths.ts helper anymore (the spec/agent guards are now OS-level via chmod); the small handful of remaining tools that need path validation can do it inline or share a tiny helper module.
 
-Custom tools are added by dropping `.ts` files directly into `agent/src/tools/` alongside the built-in ones. Loader scans that single directory.
+Custom tools are added by dropping `.ts` files directly into `agent/src/tools/`. Pass them to each `Agent` alongside the canonical catalog. Loader scans the directory and registers everything.
 
 #### 4b. Memory module
 
@@ -210,18 +223,16 @@ Skills loader:
   - Spec-only or config-only skills pass through unchanged.
 - Each skill entry tracks the source paths it was assembled from (one for unmerged, two for merged) so the system prompt summary can show both.
 
-#### 4c. Self-edit enforcement
+#### 4c. Self-edit posture
 
-Read `PROTOS_SELF_EDIT` once at startup and thread the boolean through the tool loader and skills loader. Behavior is defined in `architecture.md` → Self-modification.
+There's no in-process write guard or env-var toggle anymore. Path discipline is convention (system prompt) plus OS-level (`chmod -R a-w spec/` in production; `chmod -R a-w agent/` to disable self-edit). See `architecture.md` → Self-modification.
 
 What you must implement:
 
-- **Always-on `spec/` write guard** in the paths helper: any path under `{workspace}/spec/` throws `spec/ is read-only at runtime; instance-specific changes belong in config/`. Independent of `PROTOS_SELF_EDIT`.
-- **Conditional `agent/` write guard** when `PROTOS_SELF_EDIT=false`: paths under `{workspace}/agent/` throw `self-edit is disabled; refusing to write under agent/`.
-- **Skills loader filter** when `PROTOS_SELF_EDIT=false`: skip `spec/skills/self-edit.md` so the skill is hidden from the agent's prompt.
-- **Shell tool description nudges**: always include the `spec/` warning; conditionally append the `agent/` warning when `PROTOS_SELF_EDIT=false`. These are conventions, not enforcement.
+- **Skills loader honors `enabled: false` in frontmatter** — if `config/skills/self-edit.md` (or any skill) sets `enabled: false`, the loader skips it and the skill is hidden from the agent's system prompt. This is the user-facing way to disable self-edit even when chmod isn't applied.
+- **No paths.ts helper.** The build sequence drops the shared path-guard module that previously enforced `spec/` and `agent/` rules.
 
-#### 4d. Sub-agent runner
+#### 4d. Sub-agent runner (delegate_task)
 
 Implement `agent/src/agents/runner.ts`. Tool contract is in `spec/tools/delegate_task.md`; design rationale and constraints are in `architecture.md` → Sub-agents.
 
@@ -230,14 +241,14 @@ The runner takes the `delegate_task` inputs (prompt, skills, tools, optional mod
 Behavior:
 
 - **Resolve skills** by name from `spec/skills/` then `config/skills/` (config wins). Read the FULL skill body — the `{name}.md` file or the `{name}/SKILL.md` body, whichever the loader registered. On any missing skill, fail the call.
-- **Resolve tools** from the loaded tools map (the same map `agent.ts` builds). **Always strip `delegate_task`** — sub-agents never recurse, regardless of caller request.
+- **Resolve tools** from the canonical agent-sdk catalog plus the custom tools map. **Always strip `delegate_task`** and the canonical `task` — sub-agents never spawn further sub-agents, regardless of caller request.
 - **Build the system prompt:** framing line + today's date + concatenated skill bodies (NO SOUL.md, NO memory manifest, NO conversation history).
 - **Compute the sub-agent log path** from the parent context and call id:
   - Cron parent → `runtime/logs/cron/{jobname}/{timestamp}/{callId}.jsonl`
   - Thread parent → `runtime/logs/sub-agents/{channelId}/{conversationId}/{turn_id}-{callId}.jsonl`
-- **Resolve the model** per `architecture.md` → Model selection (`delegate_task` rule): explicit `model:` arg → first skill in the `skills:` list with `preferred_model:` frontmatter → the `subagent` profile. Call the same resolver described in step 4 so fallback is applied consistently.
-- **Call `generateText`** with the assembled system prompt, the prompt as the user message, the resolved tool subset, the resolved model client, and the same `stepCountIs(25)` cap as the main agent. Append every event the sub-agent produces (user prompt, assistant steps, tool calls, tool results) to the sub-agent log using the same event schema as threads and cron logs.
-- **Return** the final assistant text together with the workspace-relative log path. The tool-loop machinery will include this return value in the parent's `tool_result` event automatically — see `spec/tools/delegate_task.md` for the exact return shape.
+- **Resolve the model** per `architecture.md` → Model selection (`delegate_task` rule): explicit `model:` arg → first skill in the `skills:` list with `preferred_model:` frontmatter → the `subagent` profile. Call the same `agentForProfile` resolver described in step 4 so fallback is applied consistently.
+- **Construct a one-shot `Agent`** (or reuse a cached profile-keyed one) configured with the assembled `instructions` (system prompt), the resolved tool subset, and the same per-backend turn cap as the main agent. Call `agent.run({ message: prompt })` with no continuation — sub-agents are stateless; each invocation is a fresh session. Tee `query.events` into the sub-agent log file using the same event schema as threads and cron logs.
+- **Return** the final assistant text together with the workspace-relative log path. agent-sdk surfaces the assistant final text via the `text_end` event sequence — accumulate the last assistant turn's text and pass it back. The parent's `tool_result` event records both the text and the log path — see `spec/tools/delegate_task.md` for the exact return shape.
 
 Framing line for the system prompt:
 
@@ -295,7 +306,7 @@ The entry point (`agent/src/index.ts`):
 5. Starts the scheduler
 6. Logs that it's running
 
-On any config-load failure (missing file, invalid YAML, unresolved pointer, missing `$NAME` env var, missing directive reference), the process exits non-zero with a clear error message to stdout/stderr. The bash wrapper can't reasonably replicate this validation (YAML parsing, pointer resolution, env substitution), so it relies on a post-start health check (step 9) to surface early-exit failures by tailing the log.
+On any config-load failure (missing file, invalid YAML, unresolved pointer, missing `$NAME` env var, missing directive reference, **missing per-backend auth env var** for any used backend — `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` for `claude`; `OPENAI_API_KEY` or `~/.codex/auth.json` for `codex`; `OPENAI_API_KEY` for `openai-agents`), the process exits non-zero with a clear error message to stdout/stderr. The bash wrapper can't reasonably replicate this validation (YAML parsing, pointer resolution, env substitution), so it relies on a post-start health check (step 9) to surface early-exit failures by tailing the log.
 
 That's it. No HTTP server needed unless a channel requires a webhook.
 
