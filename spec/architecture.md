@@ -70,7 +70,7 @@ Practical rule: if it works well with Git, it belongs in `memory/`. If it doesn'
 | Runtime | Node.js 18+ |
 | Language | TypeScript |
 | Storage | Plain files — no database |
-| AI | [`@exprotos/agent-sdk`](https://github.com/ExProtos/agent-sdk) — one API over four runtimes (Claude Agent SDK, Codex AppServer, OpenAI Agents SDK, Vercel AI SDK) |
+| AI | [`@triangleai/agent-sdk`](https://github.com/triangleai/agent-sdk) — one API over four runtimes (Claude Agent SDK, Codex AppServer, OpenAI Agents SDK, Vercel AI SDK) |
 | Hosting | Runs directly on the host — no containers |
 
 ## Components
@@ -154,7 +154,7 @@ This applies to all invocations — direct user messages and cron-originated hea
 
 ### 3. Agent
 
-The agent is the brain. It uses [agent-sdk](https://github.com/ExProtos/agent-sdk) to receive a message + history, decide how to respond, optionally use tools, and return a response. agent-sdk wraps four runtimes (Claude Agent SDK, Codex AppServer, OpenAI Agents SDK, Vercel AI SDK) behind one API; each model profile picks one as its **backend** (see [Model selection](#model-selection) below).
+The agent is the brain. It uses [agent-sdk](https://github.com/triangleai/agent-sdk) to receive a message + history, decide how to respond, optionally use tools, and return a response. agent-sdk wraps four runtimes (Claude Agent SDK, Codex AppServer, OpenAI Agents SDK, Vercel AI SDK) behind one API; each model profile picks one as its **backend** (see [Model selection](#model-selection) below).
 
 **Tools** are typed capabilities. agent-sdk ships a canonical catalog with backend-specific dispatch — native implementations on Claude/Codex (sandboxed `Bash`, tuned `Read`/`Write`/`Edit`/`apply_patch`, native `Task`/`TodoWrite`), hosted tools on the `openai` backend (`web_search`, `code_interpreter`, etc., via the OpenAI Agents SDK), and bundled in-process implementations on Vercel and `openai` fallbacks. Custom protos-specific tools live in `agent/src/tools/` and are passed alongside the canonical set.
 
