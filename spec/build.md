@@ -242,7 +242,7 @@ The canonical tools (`bash`, `read`, `write`, `edit`, `glob`, `grep`, `webFetch`
 - Agent control: `delegate_task` (protos's skill-aware sub-agent — see step 4d)
 - Consolidation (used by `nap`/`dream` crons): `list_threads`, `read_thread_tail`, `advance_thread_cursor`
 - Memory hygiene: `find_orphans`
-- Web access (heavy tier): `browser_fetch` — single-shot Chromium render with Readability cleanup. Ships on every backend. Singleton browser process; lazy-launched on first call.
+- Web access (middle tier — heavy is the `browser-use` skill): `browser_fetch` — single-shot Chromium render with Readability cleanup. Ships on every backend. Singleton browser process; lazy-launched on first call.
 - Introspection: `list_skills` — return the current merged skill manifest. Reuses `loadAllSkills()` from `agent/src/agent.ts`; same shape the system prompt's manifest holds. Lets the agent refresh when skills changed mid-conversation.
 
 **Canonical-tool overrides** (one file each in `agent/src/tools/impls/`, wired through agent-sdk's `withImpls`, not standalone tools):

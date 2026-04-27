@@ -714,7 +714,7 @@ spec/
     read_thread_tail.md    # consolidation: read messages since cursor
     advance_thread_cursor.md  # consolidation: mark messages consolidated
     find_orphans.md        # memory hygiene: unreachable non-root files
-    browser_fetch.md       # heavy web tier: headless Chromium + Readability
+    browser_fetch.md       # middle web tier: headless Chromium + Readability (heavy is browser-use)
     web_search.md          # canonical webSearch — Tavily wiring on Vercel
     list_skills.md         # introspection: current merged skill manifest
   skills/             # bundled skills (one .md per skill — flat, not the agentskills.io directory format)
