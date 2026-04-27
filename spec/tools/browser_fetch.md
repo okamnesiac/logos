@@ -17,8 +17,17 @@ For static pages, JSON APIs, plain HTML, anything where a plain HTTP fetch would
 ## Input
 
 ```ts
-{ url: string }
+{
+  url: string,
+  session?: string,  // Optional. Reuse a persisted browser context across calls.
+}
 ```
+
+`session` is a freeform name (e.g. `"nyt"`, `"reddit"`). When omitted, the call gets a fresh ephemeral context — no cookies, no localStorage, nothing carried in. When provided, the call uses a **persistent context** stored under `runtime/browser-sessions/{session}/` (gitignored, machine-local). Cookies, localStorage, and IndexedDB persist across calls **and across daemon restarts**, so a CAPTCHA solved once stays solved, a free-tier login the model performed (via `bash` + `webFetch` cookie injection or similar) keeps working, and a metered paywall counts the same browser as one visitor.
+
+Sessions are isolated from each other and from the ephemeral default — using `session: "nyt"` and `session: "reddit"` gets you two separate cookie jars. Sessions are also isolated from the user's Chrome and from `browser-use`; only `browser_fetch` calls reading the same session see the same state.
+
+Sanitize `session` to a safe path segment — no `/`, `..`, or other path-escape characters. Reject the call with a clear error otherwise.
 
 ## Output
 
@@ -34,8 +43,9 @@ For static pages, JSON APIs, plain HTML, anything where a plain HTTP fetch would
 
 Pipeline: `chromium.launch({ headless: true })` → fresh `BrowserContext` (cookie isolation) → `page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })` → `page.content()` → Mozilla Readability over the rendered HTML → return `{ url: page.url(), title: article.title, content: article.textContent }`.
 
-- **Browser singleton — kept running for the daemon's lifetime.** Lazy-launched on the **first** `browser_fetch` call after `agent/protos start`; reused for **every** subsequent call across channels, sub-agents, and cron jobs; closed only when the daemon exits or restarts. Cold start (~1–2s) pays once per daemon, not per fetch. Warm calls land at ~500ms–1.5s depending on the page. Do not relaunch the browser per dispatch — that defeats the entire reason this tool exists.
-- **Per-fetch isolation.** A fresh `BrowserContext` and `Page` per call (cookie/storage isolation between fetches). Both close in a `finally` block after extraction so a failed fetch doesn't leak the context. The `Browser` itself stays up.
+- **Browser singleton — kept running for the daemon's lifetime.** Lazy-launched on the **first** `browser_fetch` call after `agent/protos start`; reused for **every** subsequent ephemeral call across channels, sub-agents, and cron jobs; closed only when the daemon exits or restarts. Cold start (~1–2s) pays once per daemon, not per fetch. Warm calls land at ~500ms–1.5s depending on the page. Do not relaunch the browser per dispatch — that defeats the entire reason this tool exists.
+- **Ephemeral path** (no `session`): a fresh `BrowserContext` and `Page` per call off the singleton browser, both closed in a `finally` block. The `Browser` stays up.
+- **Session path** (`session: "name"` provided): use `chromium.launchPersistentContext({ userDataDir: 'runtime/browser-sessions/{name}/', headless: true, ... })`. Persistent contexts can't share a `Browser` with each other or with the ephemeral singleton — Chromium locks each `userDataDir` to its launching process — so each named session gets its own cached `BrowserContext` (which transitively owns its own headless Chromium). Cache them in a module-scope `Map<string, BrowserContext>`; reuse on subsequent calls with the same `session`. A fresh `Page` per call inside the cached context (cookies persist, but each call starts on a blank tab). Close every cached persistent context on daemon shutdown alongside the ephemeral singleton.
 - **Realistic user agent.** A current desktop Chrome string. Default Playwright UA gets flagged as a bot more often than the realistic one.
 - **Failure modes** surface as tool errors (the SDK's tool-dispatch layer turns thrown errors into tool results the model sees):
   - Navigation timeout (>30s) → `Error("browser_fetch: navigation timeout for {url}")`.
@@ -53,8 +63,15 @@ Pipeline: `chromium.launch({ headless: true })` → fresh `BrowserContext` (cook
 
 ## Implementation notes
 
-- **Single-file tool.** `agent/src/tools/browser_fetch.ts` exports the tool definition (name, schema, execute) plus a module-local `getBrowser()` that lazy-launches the `Browser` once and caches it. The cache lives at module scope (top-level `let browser: Browser | null = null`) so every importer in the same process — main agent, sub-agent runner, cron scheduler — sees the same instance. **Do not** put `chromium.launch()` inside the `execute` function or inside an `Agent` factory closure; both of those construct fresh state per dispatch and would relaunch on every call.
-- **Browser lifecycle.** Register a `process.on('exit')` (or `SIGTERM`/`SIGINT`) handler that calls `browser.close()` if a browser was launched. Don't fight the process exit; if close fails or hangs, the process exiting cleans up anyway.
+- **Single-file tool.** `agent/src/tools/browser_fetch.ts` exports the tool definition (name, schema, execute) plus two module-local helpers: `getBrowser()` for the ephemeral singleton, and `getSessionContext(name)` for the per-session persistent contexts. Caches live at module scope:
+  ```ts
+  let browser: Browser | null = null;                          // ephemeral
+  const sessions = new Map<string, BrowserContext>();          // persistent
+  ```
+  Module scope (not factory-scope) so every importer in the same process — main agent, sub-agent runner, cron scheduler — sees the same instances. **Do not** put `chromium.launch()` or `launchPersistentContext()` inside the `execute` function or inside an `Agent` factory closure; both construct fresh state per dispatch and would relaunch on every call.
+- **Browser lifecycle.** Register a `process.on('exit')` (or `SIGTERM`/`SIGINT`) handler that calls `browser?.close()` and `ctx.close()` for every entry in the `sessions` Map. Don't fight the process exit; if a close fails or hangs, the process exiting cleans up anyway.
+- **Session disk layout.** `runtime/browser-sessions/{name}/` holds Chromium's user-data-dir (Cookies SQLite, IndexedDB, localStorage, cache). Gitignored alongside the rest of `runtime/`. The `update` workflow leaves these alone — they're machine-local state.
+- **Session sanitization.** Reject any `session` that contains `/`, `..`, leading `.`, or characters that would resolve outside `runtime/browser-sessions/{name}/`. Use the same workspace-segment safety helper threads.ts uses for channel/conversation IDs.
 - **Concurrent calls.** v1 ships with a single browser process and serializes fetches per agent. If concurrent calls become a bottleneck, swap to a small pool — see `plan/web-search-and-fetch.md` open question 5.
 - **Memory leaks.** Chromium leaks memory on multi-hour runs. v1 keeps the process up; if memory grows, recycle the browser every N fetches or on a timer — `plan/web-search-and-fetch.md` open question 6.
 - **No download interception, no file uploads.** This tool reads pages; it doesn't drive interactions. Anything stateful belongs in the `browser-use` skill.

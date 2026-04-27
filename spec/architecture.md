@@ -811,6 +811,9 @@ runtime/
     openai/
       {continuation}.jsonl
   blobs/              # content-addressed media (sha256-named) referenced by thread events
+  browser-sessions/   # browserFetch persistent contexts, keyed by `session` arg (one user-data-dir per name)
+    nyt/
+    reddit/
   clients/            # per-client cursor files
     chat.cursor       # default terminal client
   logs/
