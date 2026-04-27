@@ -43,7 +43,12 @@ Lives in `agent/src/tools/impls/tavily.ts`, exported as `tavilySearchExecute` an
 - **Response mapping:**
   - `results[].{title, url, content}` → canonical search-result shape.
   - If `answer` is non-empty, prepend it as the synthetic first result described under Output.
-- **Failure modes:** 401 (auth) and 429 (rate limit) surface as tool-level errors, not crashes. Network errors wrap with the query in the message.
+- **Failure modes — wrap-all rule:** every error thrown from `tavilySearchExecute` prefixes its message with `tavily:` and (where one is in scope) includes the query. This includes auth failures, rate limits, network/DNS errors, malformed responses (e.g. a maintenance-page HTML body returned with status 200, which crashes `res.json()`), and any unexpected condition. The model gets a consistent surface. Common cases:
+  - 401 → `Error("tavily: HTTP 401 — check TAVILY_API_KEY in config/.env")`.
+  - 429 → `Error("tavily: HTTP 429 — rate limit exceeded")`.
+  - Network/DNS errors → `Error("tavily: network error for query {query}: {reason}")`.
+  - Non-2xx status (other) → `Error("tavily: HTTP {status} for query {query}")`.
+  - JSON parse / malformed response → `Error("tavily: malformed response for query {query}: {reason}")`.
 - **Free tier:** 1000 queries/month, comfortably above personal volume. `search_depth: 'advanced'` costs more credits but returns deeper content; default to `basic`, revisit if results read thin.
 
 ## Dependencies

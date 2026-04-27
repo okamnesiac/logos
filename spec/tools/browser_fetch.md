@@ -47,11 +47,12 @@ Pipeline: `chromium.launch({ headless: true })` → fresh `BrowserContext` (cook
 - **Ephemeral path** (no `session`): a fresh `BrowserContext` and `Page` per call off the singleton browser, both closed in a `finally` block. The `Browser` stays up.
 - **Session path** (`session: "name"` provided): use `chromium.launchPersistentContext({ userDataDir: 'runtime/browser-sessions/{name}/', headless: true, ... })`. Persistent contexts can't share a `Browser` with each other or with the ephemeral singleton — Chromium locks each `userDataDir` to its launching process — so each named session gets its own cached `BrowserContext` (which transitively owns its own headless Chromium). Cache them in a module-scope `Map<string, BrowserContext>`; reuse on subsequent calls with the same `session`. A fresh `Page` per call inside the cached context (cookies persist, but each call starts on a blank tab). Close every cached persistent context on daemon shutdown alongside the ephemeral singleton.
 - **Realistic user agent.** A current desktop Chrome string. Default Playwright UA gets flagged as a bot more often than the realistic one.
-- **Failure modes** surface as tool errors (the SDK's tool-dispatch layer turns thrown errors into tool results the model sees):
+- **Failure modes** surface as tool errors (the SDK's tool-dispatch layer turns thrown errors into tool results the model sees). **Wrap-all rule:** every error thrown from this tool prefixes its message with `browser_fetch:` and includes the URL where one is in scope — including failures from `chromium.launch`, `launchPersistentContext`, `newContext`, `newPage`, `safeSegment` on the session name, and the navigation/render path below. The model gets a consistent surface and can reliably detect "this is a browser_fetch failure, fall back to webFetch." Common cases (the message shapes for the most frequent paths):
   - Navigation timeout (>30s) → `Error("browser_fetch: navigation timeout for {url}")`.
   - Non-2xx HTTP status → `Error("browser_fetch: HTTP {status} for {url}")`.
-  - Readability returning `null` (no extractable article) → fall back to `body.innerText` truncated to ~50KB. Don't error — many useful pages aren't articles, and a partial result beats a hard fail.
+  - Readability returning `null` (no extractable article) → **don't** error; fall back to `body.innerText` truncated to ~50KB. Many useful pages aren't articles, and a partial result beats a hard fail.
   - Network/DNS errors from `page.goto` → wrap and re-throw with the URL in the message.
+  - Invalid `session` name (path-escape characters) → `Error("browser_fetch: invalid session name {value}")`.
 - **No persistent state.** No cookies, no localStorage, no service workers carried across calls. The browser sees only what the URL renders to a fresh visitor — same blast radius as `webFetch`, just on a real engine.
 
 ## Dependencies
@@ -72,7 +73,13 @@ Pipeline: `chromium.launch({ headless: true })` → fresh `BrowserContext` (cook
 - **Browser lifecycle.** Register a `process.on('exit')` (or `SIGTERM`/`SIGINT`) handler that calls `browser?.close()` and `ctx.close()` for every entry in the `sessions` Map. Don't fight the process exit; if a close fails or hangs, the process exiting cleans up anyway.
 - **Session disk layout.** `runtime/browser-sessions/{name}/` holds Chromium's user-data-dir (Cookies SQLite, IndexedDB, localStorage, cache). Gitignored alongside the rest of `runtime/`. The `update` workflow leaves these alone — they're machine-local state.
 - **Session sanitization.** Reject any `session` that contains `/`, `..`, leading `.`, or characters that would resolve outside `runtime/browser-sessions/{name}/`. Use the same workspace-segment safety helper threads.ts uses for channel/conversation IDs.
-- **Concurrent calls.** v1 ships with a single browser process and serializes fetches per agent. If concurrent calls become a bottleneck, swap to a small pool — see `plan/web-search-and-fetch.md` open question 5.
+- **Concurrent callers — guard the launch.** The router serializes per-conversation, *not* globally; two channels (or a channel + a cron) can call `browser_fetch` simultaneously. Cache the **in-flight Promise**, not just the resolved `Browser` / `BrowserContext`, so concurrent first-callers `await` the same launch:
+  ```ts
+  let browserPromise: Promise<Browser> | null = null;
+  const sessionPromises = new Map<string, Promise<BrowserContext>>();
+  ```
+  The naive nullable-and-assign pattern (`if (!browser) browser = await chromium.launch(...)`) silently leaks an orphaned Chromium process per concurrent first-caller — invisible until you inspect `ps`. On launch failure, clear the cached Promise so the next call retries instead of locking onto the rejected promise forever.
+- **Concurrent throughput.** Once the singleton is up, individual `page.goto`s on its `BrowserContext`s run concurrently inside Chromium without further coordination. Persistent contexts each own their own Chromium process, so per-session calls are also parallel relative to other sessions and to ephemeral fetches. If high concurrency on the *ephemeral* singleton becomes a bottleneck, swap to a small pool — see `plan/web-search-and-fetch.md` open question 5.
 - **Memory leaks.** Chromium leaks memory on multi-hour runs. v1 keeps the process up; if memory grows, recycle the browser every N fetches or on a timer — `plan/web-search-and-fetch.md` open question 6.
 - **No download interception, no file uploads.** This tool reads pages; it doesn't drive interactions. Anything stateful belongs in the `browser-use` skill.
 - **Don't catch the SDK's turn-cap.** `browser_fetch` doesn't iterate or recurse — it's one round-trip per call. Turn-cap concerns belong upstream in agent-sdk, not here.
