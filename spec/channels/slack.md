@@ -39,8 +39,9 @@ See `architecture.md` → Storage → Attachments for the blob layout and event 
 
 ## Receipt ack
 
-Slack has no bot-visible typing indicator, so the channel posts a literal `Thinking...` message as soon as it accepts an inbound event, before dispatching to the router. This gives the user immediate feedback that the message was received and is being worked on; the agent's actual reply lands as a follow-up message (the ack stays in the channel — there's no edit-in-place or deletion).
+Slack has no bot-visible typing indicator, so the channel posts a short placeholder message as soon as it accepts an inbound event, before dispatching to the router. This gives the user immediate feedback that the message was received and is being worked on; the agent's actual reply lands as a follow-up message (the ack stays in the channel — there's no edit-in-place or deletion).
 
+- The placeholder is a randomly-selected playful gerund — "Thinking…", "Pondering…", "Noodling…", "Mulling…", "Brewing…", etc. — followed by `...`. The variation is deliberate (mirrors the Claude Code thinking indicator) and the verb is picked fresh on every inbound event. Keep the list playful but tasteful; one of the entries should always be the literal `Thinking`.
 - Post in the same channel, on the same thread (`thread_ts` from the inbound event for DM messages; the thread root — `event.thread_ts ?? event.ts` — for `app_mention`).
 - If the post fails (e.g. transient API error), log `[slack] ack failed: <msg>` and continue — the dispatch still runs. Failing the receipt must never prevent the message from reaching the router.
 
