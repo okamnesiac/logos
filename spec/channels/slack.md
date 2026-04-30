@@ -47,6 +47,28 @@ The assistant writes standard markdown; Slack uses "mrkdwn", a similar but incom
 
 Code spans, fenced code blocks, blockquotes, and bullet lists are already compatible.
 
+## Diagnostics & reconnection
+
+Bolt's Socket Mode client auto-reconnects on transient WebSocket disruption (ping timeouts, brief network drops). What turns a transient blip into a stuck-disconnected daemon is almost always an unhandled error in the receiver chain — Bolt logs it but the connection never re-establishes. Before designing any self-healing on top, the channel must surface what's actually happening.
+
+The channel implementation MUST:
+
+1. **Register a global error handler.** Catches errors that bubble out of listeners; without this they go to Bolt's logger only and can be drowned out by other output.
+
+   ```ts
+   app.error(async (err) => {
+     console.error(`[slack] unhandled: ${err.message}`);
+   });
+   ```
+
+2. **Log Socket Mode lifecycle events.** Reach the underlying client through `app.receiver` (a `SocketModeReceiver` when `socketMode: true`) and listen for the six state events the client emits: `connecting`, `connected`, `authenticated`, `reconnecting`, `disconnecting`, `disconnected`. Log each with a timestamp and the elapsed time since the last received event. (The client uses `eventemitter3` and does not emit `error` events — error surfacing is the `app.error()` handler's job.) Without this timeline, "the bot stopped responding" is indistinguishable from "the daemon crashed silently" or "Slack rate-limited us."
+
+3. **Track `lastEventAt` in the channel module.** Update it whenever the client emits a `slack_event` (covers every inbound Slack event including messages and app_mentions). Not consumed for recovery yet — it's the signal a future watchdog or `/health`-style probe will read.
+
+The `log_level` field in `channels.yaml` defaults to `warn`. Bump to `info` while diagnosing — Bolt emits reconnect attempts at INFO, and their presence or absence tells us whether the client is even trying.
+
+**Recovery is out of scope for this section.** The agent process cannot self-restart via the `agent/protos` wrapper — the wrapper runs as a child of the daemon, so killing the daemon tears down the wrapper subprocess before it reaches the start step. Recovery designs go through an external supervisor (launchd, systemd, etc.) or in-process re-registration, addressed separately once the diagnostics here have identified the actual failure mode.
+
 ## Notes
 
 - Socket Mode connects via WebSocket — no HTTP server or public URL needed
